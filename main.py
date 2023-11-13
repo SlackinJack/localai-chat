@@ -14,6 +14,8 @@ from termcolor import colored
 # add conversation contex
 # config file
 # speedup and cleanup
+# set separate models for chat and completion
+# apply models correctly
 
 
 # default vars
@@ -24,13 +26,14 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 folderModels = "../models/"
 strDefaultModel = ""
-strModel = ""
+strModelChat = ""
+strModelCompletion = ""
 strModels = ""
 # triggers should be used to do specific functions
 triggers = {
     "browse": [
-    "http://",
-    "https://"
+    "http:",
+    "https:"
     ],
     "open": [
     "'/"
@@ -47,6 +50,7 @@ actions = {
     "trends"
     ],
     "generate": [
+    "sarcasm",
     "experiences",
     "opinions",
     "advice",
@@ -120,36 +124,36 @@ def helpCommand():
     printGeneric("exit/quit")
 
 
-def modelCommand():
+def modelCommand(mode, currentModel):
     printInfo("Available models: " + strModels)
-    model = printInput("Select model (leave empty for default '" + strDefaultModel + "'): ")
+    model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
     if len(model) == 0:
-        model = strDefaultModel
-    printSuccess("Model set to: " + model)
+        model = currentModel
+    printSuccess(mode + " model set to: " + model)
     return model
 
 
-def chatPrompt(modelIn, promptIn):
-    action = determineCourseOfAction(modelIn, promptIn)
+def chatPrompt(chatModelIn, compModelIn, promptIn):
+    action = determineCourseOfAction(compModelIn, promptIn)
     printDebug("Action determined: " + action)
     if action == "search":
-        return doSearchResponse(modelIn, promptIn)
+        return doSearchResponse(chatModelIn, compModelIn, promptIn)
     elif action == "generate":
-        return getCompletion(modelIn, promptIn)
+        return getChatCompletion(chatModelIn, promptIn)
     elif action == "browse":
-        return doBrowseReponse(modelIn, promptIn)
+        return doBrowseReponse(chatModelIn, promptIn)
     elif action == "open":
-        return doOpenResponse(modelIn, promptIn)
+        return doOpenResponse(chatModelIn, compModelIn, promptIn)
     else:
-        return getCompletion(modelIn, promptIn)
+        return getChatCompletion(chatModelIn, promptIn)
 
 
-def determineCourseOfAction(modelIn, promptIn):
+def determineCourseOfAction(compModelIn, promptIn):
     for key in triggers:
-        for value in triggers[key]:
-            for v in value:
-                if v in promptIn:
-                    return key
+        values = triggers[key]
+        for v in values:
+            if v in promptIn:
+                return key
     for key in actions:
         keytags = ""
         for tag in actions[key]:
@@ -157,7 +161,8 @@ def determineCourseOfAction(modelIn, promptIn):
                 keytags = tag
             else:
                 keytags = keytags + ", " + tag
-        completion = getCompletion(modelIn, "Answering exclusively with 'yes' or 'no', does '" + promptIn + "' discuss any of the following: " + keytags + "?")
+        completion = getContainsYesOrNo(compModelIn, promptIn, keytags)
+        printDebug(completion)
         if "Yes" in completion:
             return key
     printWarning("Couldn't find an appropriate action to do!")
@@ -175,12 +180,12 @@ def browse(weblinkIn):
     return cleanupString(soup.text)
 
 
-def doBrowseReponse(modelIn, promptIn):
+def doBrowseReponse(chatModelIn, promptIn):
     strings = promptIn.split(" ")
     for s in strings:
         if s.startswith("http"):
             newPrompt = promptIn.replace(s, "")
-            return getAnswer(modelIn, browse(s), newPrompt)
+            return getAnswer(chatModelIn, browse(s), newPrompt)
 
 
 ##################################################
@@ -188,7 +193,7 @@ def doBrowseReponse(modelIn, promptIn):
 ##################################################
 
 
-def openFile(modelIn, filePath):
+def openFile(compModelIn, filePath):
     strFile = ""
     if filePath.endswith(".pdf"):
         # TODO
@@ -200,12 +205,12 @@ def openFile(modelIn, filePath):
         i = 0
         while i < pdfPages:
             printDebug("Reading page: " + str(i))
-            pdfPageSummaries.append(getSummary(modelIn, (pdfFile.pages[i]).extract_text()))
+            pdfPageSummaries.append(getSummary(compModelIn, (pdfFile.pages[i]).extract_text()))
             i += 1
         if i <= 1:
             return str(pdfPageSummaries)
         else:
-            return getSummary(modelIn, str(pdfPageSummaries))
+            return getSummary(compModelIn, str(pdfPageSummaries))
     else:
         # open as text-based file as default
         f = open(filePath, "r")
@@ -214,11 +219,11 @@ def openFile(modelIn, filePath):
     return cleanupString(strFile)
 
 
-def doOpenResponse(modelIn, promptIn):
+def doOpenResponse(chatModelIn, compModelIn, promptIn):
     filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
     promptIn = promptIn.replace("'" + filePath + "'", "")
-    strFileContents = openFile(modelIn, filePath)
-    return getAnswer(modelIn, strFileContents, promptIn)
+    strFileContents = openFile(compModelIn, filePath)
+    return getAnswer(chatModelIn, strFileContents, promptIn)
 
 
 ##################################################
@@ -226,12 +231,12 @@ def doOpenResponse(modelIn, promptIn):
 ##################################################
 
 
-def doSearchResponse(modelIn, promptIn):
+def doSearchResponse(chatModelIn, compModelIn, promptIn):
     response = ""
     while len(response) == 0:
         printDebug("Searching online for this prompt...")
         forceSearchOnline = shouldSearchOnline = False
-        searchTerms = generateSearchTerms(modelIn, promptIn)
+        searchTerms = generateSearchTerms(compModelIn, promptIn)
         printDebug("All search terms and queries: " + searchTerms)
         sources = dict()
         terms = searchTerms.split("; ")
@@ -246,15 +251,16 @@ def doSearchResponse(modelIn, promptIn):
         for key in sources:
             compiledSources = compiledSources + "[(Source: " + (sources[key])[0] + "), (Answer:" + (sources[key])[1] + ")]"
         printDebug("Formulating response from information...")
-        response = getAnswer(modelIn, compiledSources, promptIn)
+        response = getAnswer(chatModelIn, compiledSources, promptIn)
         response += "\n\n\nSources considered:\n"
         for key in sources:
             response += "[" + str(key + 1) + "] '" + (sources[key])[2] + "\n"
         return response
 
 
-def generateSearchTerms(modelIn, promptIn):
-    completion = getCompletion(modelIn, "Determine the topic, then generate a list of three search terms regarding the topic that will be used to search for the following: " + promptIn)
+def generateSearchTerms(compModelIn, promptIn):
+    completion = getSearchTerms(compModelIn, promptIn)
+    printDebug(completion)
     lines = completion.split("\n")
     searchTerms = ""
     i = 1
@@ -329,20 +335,43 @@ def searchFromSearchTerms(searchTerm):
 #################################################
 
 
-def getCompletion(modelIn, promptIn):
+# used for generates
+def getChatCompletion(chatModelIn, promptIn):
     completion = openai.ChatCompletion.create(
-        model=modelIn,
+        model=chatModelIn,
         messages=[{"role": "user", "content": promptIn}]
     )
     return completion.choices[0].message.content
 
 
-def getSummary(modelIn, textIn):
-    return getCompletion(modelIn, "Summarize this: " + textIn)
+# any model
+def getCompletion(modelIn, promptIn):
+    completion = openai.Completion.create(
+        model=modelIn,
+        prompt=promptIn
+    )
+    return completion.choices[0].text
 
 
-def getAnswer(modelIn, sourcesIn, questionIn):
-    return getCompletion(modelIn, "Using: " + sourcesIn + ", answer the following in an appropriate format: '" + questionIn + "'.")
+# chat model
+def getAnswer(chatModelIn, sourcesIn, questionIn):
+    return getCompletion(chatModelIn, "Using: " + sourcesIn + ", answer the following in an appropriate format: '" + questionIn + "'.")
+
+
+# comp model
+def getSummary(compModelIn, textIn):
+    return getCompletion(compModelIn, "Summarize this: " + textIn)
+
+
+# comp model
+def getContainsYesOrNo(compModelIn, promptIn, targetIn):
+    return getCompletion(compModelIn, "Answering exclusively with 'yes' or 'no', does '" + promptIn + "' discuss any of the following: " + targetIn + "? Give your response in one word only.")
+
+
+# comp model
+def getSearchTerms(compModelIn, promptIn):
+    return getCompletion(compModelIn, "Determine the topic, then generate a list of three search terms regarding the topic that will be used to search for the following: " + promptIn)
+
 
 #################################################
 ################## BEGIN UTILS ##################
@@ -363,7 +392,12 @@ def cleanupString(stringIn):
 
 strModels = detectModels()
 strDefaultModel = strModels.split(",")[0]
-strModel = strDefaultModel
+if len(strModelChat) == 0:
+    strModelChat = strDefaultModel
+if len(strModelCompletion) == 0:
+    strModelCompletion = strDefaultModel
+printInfo("Chat model ('chatmodel' to change): " + strModelChat)
+printInfo("Comp model ('compmodel' to change): " + strModelCompletion)
 shouldRun = True
 while shouldRun:
     printSeparator()
@@ -374,13 +408,15 @@ while shouldRun:
         helpCommand()
     elif strPrompt == "exit" or strPrompt == "quit":
         shouldRun = False
-    elif strPrompt == "model":
-        strModel = modelCommand()
+    elif strPrompt == "compmodel":
+        strModelCompletion = modelCommand("Completion", strModelCompletion)
+    elif strPrompt == "chatmodel":
+        strModelChat = modelCommand("Chat", strModelChat)
     else:
         strResponse = ""
         printInfo("Generating response...")
         tic = time.perf_counter()
-        strResponse = chatPrompt(strModel, strPrompt)
+        strResponse = chatPrompt(strModelChat, strModelCompletion, strPrompt)
         toc = time.perf_counter()
         printSeparator()
         printResponse(strResponse)
