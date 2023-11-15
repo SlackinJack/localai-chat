@@ -1,3 +1,4 @@
+import json
 import openai
 import os
 import re
@@ -6,64 +7,233 @@ import time
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 from PyPDF2 import PdfReader
+from readability import Document
 from termcolor import colored
 
 
 # TODO
 # determine topic, research topic, formulate educated answer based on topic
-# add conversation contex
-# config file
-# speedup and cleanup
-# set separate models for chat and completion
-# apply models correctly
+# add conversation context
 
 
-# default vars
-openai.api_base = "http://localhost:8080/v1"
-openai.api_key = "sx-xxx"
-OPENAI_API_KEY = "sx-xxx"
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+fileConfig = open("config.txt", "r")
+fileConfiguration = (fileConfig.read()).split("\n")
+fileConfig.close()
+CONFIG = dict()
+for line in fileConfiguration:
+    if len(line) > 0 and not line.startswith("#"):
+        key = line.split("=")[0]
+        value = line.split("=")[1]
+        CONFIG[key] = value
 
-folderModels = "../models/"
+
+openai.api_base = CONFIG["ADDRESS"]
+openai.api_key = OPENAI_API_KEY = CONFIG["KEY"]
+os.environ["OPENAI_API_KEY"] = CONFIG["KEY"]
+
+
+intMaxSources = int(CONFIG["MAX_SOURCES"])
+intMaxSentences = int(CONFIG["MAX_SENTENCES"])
+folderModels = CONFIG["MODELS_PATH"]
 strDefaultModel = ""
-strModelChat = ""
-strModelCompletion = ""
+strModelChat = CONFIG["CHAT_MODEL"]
+strModelCompletion = CONFIG["COMPLETION_MODEL"]
 strModels = ""
+
+
+strAnswerTemplate = ""
+with open("answer-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strAnswerTemplate += l + "\n"
+
+
+strChatTemplate = ""
+with open("chat-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strChatTemplate += l + "\n"
+
+
+strCompletionTemplate = ""
+with open("completion-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strCompletionTemplate += l + "\n"
+
+
+strSummaryTemplate = ""
+with open("summary-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strSummaryTemplate += l + "\n"
+
+
+strCurrentPrompt = ""
+
+
+#################################################
+################## BEGIN UTILS ##################
+#################################################
+
+
+def getInfoFromWebsite(websiteIn, bypassLength):
+    # if "JavaScript" in websiteText and "cookies" in websiteText:
+    # source.remove(key)
+    # continue
+    website = requests.get(websiteIn)
+    reader = Document(website.content)
+    websiteText = reader.summary()
+    websiteText = re.sub('<[^<]+?>', '', websiteText)
+    websiteText = cleanupString(websiteText)
+    if not bypassLength:
+        i = 0 # chars
+        j = 0 # sentences
+        k = 0 # chars since last sentence
+        global intMaxSentences
+        for char in websiteText:
+            i += 1
+            k += 1
+            if "." == char or "!" == char or "?" == char:
+                j += 1
+                if k < 32:
+                    # sentence is too short to be considered as complete
+                    j -= 1
+                if j == intMaxSentences:
+                    break
+                k = 0
+        websiteText = websiteText[0:i]
+    return websiteText
+
+
+def searchWeb(keywords):
+    response = ""
+    sources = dict()
+    global intMaxSources
+    printDebug("Generated serach term: " + keywords)
+    index = 0
+    while True:
+        try:
+            # TODO: add website blacklist filters
+            # TODO: filter websites that ask for js/cookies
+            for result in DDGS().text(keywords, max_results=intMaxSources):
+                sources[index] = result.get("href")
+                index += 1
+            break
+        except:
+            printDebug("Exception thrown while looking up ddg texts, trying again in 5 seconds...")
+            time.sleep(5)
+    compiledSources = ""
+    printDebug("Target links: " + str(sources))
+    for key in sources:
+        websiteText = getInfoFromWebsite(sources[key], False)
+        
+        printDebug("[" + str(key + 1) + "] " + websiteText)
+        compiledSources += "[" + websiteText + "]"
+    printDebug("Generating response with sources...")
+    global strModelChat
+    global strCurrentPrompt
+    if len(compiledSources) < 1:
+        printWarning("No sources compiled - the reply will be completely generated!")
+    response = getAnswer(strCurrentPrompt, compiledSources)
+    if len(compiledSources) > 1:
+        response += "\n\n\nSources considered:\n"
+        for key in sources:
+            response += "[" + str(key + 1) + "] '" + sources[key] + "\n"
+    return response
+
+
+def browse(promptIn):
+    strings = promptIn.split(" ")
+    for s in strings:
+        if s.startswith("http"):
+            newPrompt = promptIn.replace(s, "")
+            return getAnswer(newPrompt, getInfoFromWebsite(s, True))
+
+
+def openFile(promptIn):
+    # TODO: url path to files
+    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
+    newPrompt = promptIn.replace("'" + filePath + "'", "")
+    strFileContents = ""
+    if filePath.endswith(".pdf")
+        # TODO: add option to read entire pdf at once
+        printWarning("PDF support is very primative!")
+        pdfFile = PdfReader(filePath)
+        pdfPages = len(pdfFile.pages)
+        pdfPageSummaries = []
+        i = 0
+        if pdfPages >= 2:
+            # get 2 pages of text each cycle
+            while i < pdfPages:
+                printDebug("Reading page: " + str(i))
+                p = pdfFile.pages[i].extract_text()
+                p2 = ""
+                i1 = i + 1
+                if i1 <= pdfPages:
+                    printDebug("Reading page: " + str(i1))
+                    p2 = pdfFile.pages[i1].extract_text()
+                pdfPageSummaries.append(getSummary(p + "\n" + p2))
+                i = i + 2
+            return getAnswer(newPrompt, pdfPageSummaries)
+        else:
+            # single page pdf
+            printDebug("Reading page: " + str(i))
+            p = pdfFile.pages[i].extract_text()
+            return getAnswer(newPrompt, p)
+    else:
+        # open as text-based file as default
+        f = open(filePath, "r")
+        strFile = f.read()
+        f.close()
+    strFileContents = cleanupString(strFileContents)
+    return getAnswer(promptIn, strFileContents)
+
+
+# functions
+availableFunctions = [
+    {
+        "name": "searchWeb",
+        "description": "Search for uncommon information. Searchable topics: news, people, locations, products and services.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keywords": {
+                    "type": "string",
+                    "description": "The topic or subject of the prompt.",
+                },
+            },
+            "required": ["keywords"],
+        },
+    }
+]
+
+
+functionMap = {
+    "searchWeb": searchWeb,
+}
+
+
 # triggers should be used to do specific functions
 triggers = {
     "browse": [
     "http:",
     "https:"
     ],
-    "open": [
+    "openFile": [
     "'/"
     ]
 }
-# actions should be used to influence the output response
-actions = {
-    "search": [
-    "news",
-    "biography",
-    "facts",
-    "products",
-    "economics",
-    "trends"
-    ],
-    "generate": [
-    "sarcasm",
-    "experiences",
-    "opinions",
-    "advice",
-    "greetings",
-    "philosophies",
-    "ideologies",
-    "ideas",
-    "feelings",
-    "common knowledge",
-    "conventional wisdom",
-    "creative works"
-    ]
+
+
+triggerFunctionMap = {
+    "browse": browse,
+    "openFile": openFile,
 }
+
+
+def cleanupString(stringIn):
+    out = stringIn.replace("\n", " ").replace("\r", "")          # remove all newlines
+    out = ' '.join(out.split())                                  # remove all redundant spaces
+    out = (out.encode("ascii", errors="ignore")).decode()        # drop all non-ascii chars
+    return out
+
 
 # https://pypi.org/project/termcolor/
 
@@ -133,256 +303,113 @@ def modelCommand(mode, currentModel):
     return model
 
 
-def chatPrompt(chatModelIn, compModelIn, promptIn):
-    action = determineCourseOfAction(compModelIn, promptIn)
-    printDebug("Action determined: " + action)
-    if action == "search":
-        return doSearchResponse(chatModelIn, compModelIn, promptIn)
-    elif action == "generate":
-        return getChatCompletion(chatModelIn, promptIn)
-    elif action == "browse":
-        return doBrowseReponse(chatModelIn, promptIn)
-    elif action == "open":
-        return doOpenResponse(chatModelIn, compModelIn, promptIn)
-    else:
-        return getChatCompletion(chatModelIn, promptIn)
-
-
-def determineCourseOfAction(compModelIn, promptIn):
+def getActionFromPrompt(promptIn):
     for key in triggers:
-        values = triggers[key]
-        for v in values:
-            if v in promptIn:
+        for value in triggers[key]:
+            if value in promptIn:
                 return key
-    for key in actions:
-        keytags = ""
-        for tag in actions[key]:
-            if len(keytags) == 0:
-                keytags = tag
-            else:
-                keytags = keytags + ", " + tag
-        completion = getContainsYesOrNo(compModelIn, promptIn, keytags)
-        printDebug(completion)
-        if "Yes" in completion:
-            return key
-    printWarning("Couldn't find an appropriate action to do!")
-    return "default_generate"
+    return "default"
 
 
-#################################################
-################# BEGIN WEBSITE #################
-#################################################
-
-
-def browse(weblinkIn):
-    site = requests.get(weblinkIn)
-    soup = BeautifulSoup(site.text, "html.parser")
-    return cleanupString(soup.text)
-
-
-def doBrowseReponse(chatModelIn, promptIn):
-    strings = promptIn.split(" ")
-    for s in strings:
-        if s.startswith("http"):
-            newPrompt = promptIn.replace(s, "")
-            return getAnswer(chatModelIn, browse(s), newPrompt)
-
-
-##################################################
-################### BEGIN FILE ###################
-##################################################
-
-
-def openFile(compModelIn, filePath):
-    strFile = ""
-    if filePath.endswith(".pdf"):
-        # TODO
-        # speedup reading (read 2 pages at once?)
-        printWarning("PDF support is very primative!")
-        pdfFile = PdfReader(filePath)
-        pdfPages = len(pdfFile.pages)
-        pdfPageSummaries = []
-        i = 0
-        while i < pdfPages:
-            printDebug("Reading page: " + str(i))
-            pdfPageSummaries.append(getSummary(compModelIn, (pdfFile.pages[i]).extract_text()))
-            i += 1
-        if i <= 1:
-            return str(pdfPageSummaries)
-        else:
-            return getSummary(compModelIn, str(pdfPageSummaries))
-    else:
-        # open as text-based file as default
-        f = open(filePath, "r")
-        strFile = f.read()
-        f.close()
-    return cleanupString(strFile)
-
-
-def doOpenResponse(chatModelIn, compModelIn, promptIn):
-    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
-    promptIn = promptIn.replace("'" + filePath + "'", "")
-    strFileContents = openFile(compModelIn, filePath)
-    return getAnswer(chatModelIn, strFileContents, promptIn)
-
-
-##################################################
-################## BEGIN SEARCH ##################
-##################################################
-
-
-def doSearchResponse(chatModelIn, compModelIn, promptIn):
+def chatPrompt(promptIn):
+    global strCurrentPrompt
+    strCurrentPrompt = promptIn
+    action = getActionFromPrompt(promptIn)
     response = ""
-    while len(response) == 0:
-        printDebug("Searching online for this prompt...")
-        forceSearchOnline = shouldSearchOnline = False
-        searchTerms = generateSearchTerms(compModelIn, promptIn)
-        printDebug("All search terms and queries: " + searchTerms)
-        sources = dict()
-        terms = searchTerms.split("; ")
-        index = 0
-        for term in terms:
-            sources[index] = searchFromSearchTerms(term)
-            # prevent spamming
-            time.sleep(3)
-            index += 1
-        compiledSources = ""
-        printDebug("Gathered information on the prompt: " + str(sources))
-        for key in sources:
-            compiledSources = compiledSources + "[(Source: " + (sources[key])[0] + "), (Answer:" + (sources[key])[1] + ")]"
-        printDebug("Formulating response from information...")
-        response = getAnswer(chatModelIn, compiledSources, promptIn)
-        response += "\n\n\nSources considered:\n"
-        for key in sources:
-            response += "[" + str(key + 1) + "] '" + (sources[key])[2] + "\n"
-        return response
-
-
-def generateSearchTerms(compModelIn, promptIn):
-    completion = getSearchTerms(compModelIn, promptIn)
-    printDebug(completion)
-    lines = completion.split("\n")
-    searchTerms = ""
-    i = 1
-    for line in lines:
-        if line.startswith(str(i)):
-            term = line.split(str(i) + ". ")[1]
-            if len(searchTerms) == 0:
-                searchTerms = term
-            else:
-                searchTerms = searchTerms + "; " + term
-            i += 1
-        elif line.startswith("Query: "):
-            query = line.split(": ")[1]
-            if len(searchTerms) == 0:
-                searchTerms = query
-            else:
-                searchTerms = searchTerms + "; " + query
-    return searchTerms
-
-
-def searchFromSearchTerms(searchTerm):
-    printDebug("Searching online... [" + searchTerm + "]")
-    webTitle = webBody = webRef = ""
-
-    while len(webTitle) == len(webBody) == len(webRef) == 0:
-        # ddg answers
-        while True:
-            try:
-                for result in DDGS().answers(searchTerm):
-                    webTitle = result.get("title")
-                    webBody = result.get("body")
-                    webRef = result.get("href")
-                    break
-                break
-            except:
-                printDebug("Exception thrown while looking up ddg answers, trying again in 5 seconds...")
-                time.sleep(3)
-        # ddg suggestions
-        printDebug("Answers were empty, trying suggestion search instead...")
-        time.sleep(3)
-        while True:
-            try:
-                for result in DDGS().suggestions(searchTerm):
-                    webTitle = result.get("title")
-                    webBody = result.get("body")
-                    webRef = result.get("href")
-                    break
-                break
-            except:
-                printDebug("Exception thrown while looking up ddg suggestions, trying again in 5 seconds...")
-                time.sleep(3)
-        # ddg texts
-        printDebug("Suggestions were empty, trying text search instead...")
-        time.sleep(3)
-        while True:
-            try:
-                for result in DDGS().text(searchTerm, max_results=1):
-                    webTitle = result.get("title")
-                    webBody = result.get("body")
-                    webRef = result.get("href")
-                    break
-                break
-            except:
-                printDebug("Exception thrown while looking up ddg texts, trying again in 5 seconds...")
-                time.sleep(3)
-        break
-    return [webTitle, webBody, webRef]
-
+    if action == "default":
+        response = getResponse(promptIn)
+    else:
+        functionCall = triggerFunctionMap[action]
+        response = functionCall(promptIn)
+    strCurrentPrompt = ""
+    return response
 
 #################################################
 ############### BEGIN COMPLETIONS ###############
 #################################################
 
 
-# used for generates
-def getChatCompletion(chatModelIn, promptIn):
+def getChatCompletion(templateMode, input1, input2=None):
+    global strModelChat
+    global strModelCompletion
+    global strChatTemplate                 #0
+    global strCompletionTemplate           #1
+    global strAnswerTemplate               #2
+    global strSummaryTemplate              #3
+    strTemplatedPrompt = ""
+    strModelToUse = ""
+    match templateMode:
+        case 1:
+            strTemplatedPrompt = strCompletionTemplate.replace("{{.Input}}", input1)
+            strModelToUse = strModelCompletion
+        case 2:
+            strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", input1).replace("{{.Input2}}", input2)
+            strModelToUse = strModelCompletion
+        case 3:
+            strTemplatedPrompt = strSummaryTemplate.replace("{{.Input}}", input1)
+            strModelToUse = strModelCompletion
+        case _: # and case 0:
+            strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", input1)
+            strModelToUse = strModelChat
     completion = openai.ChatCompletion.create(
-        model=chatModelIn,
-        messages=[{"role": "user", "content": promptIn}]
+        model = strModelToUse,
+        messages = [
+            {
+                "role": "user",
+                "content": strTemplatedPrompt
+            }
+        ]
     )
     return completion.choices[0].message.content
 
 
-# any model
-def getCompletion(modelIn, promptIn):
-    completion = openai.Completion.create(
-        model=modelIn,
-        prompt=promptIn
+def getChatFunctionCompletion(promptIn):
+    global strModelCompletion
+    completion = openai.ChatCompletion.create(
+        model = strModelCompletion,
+        messages = promptIn,
+        functions = availableFunctions,
+        function_call = "auto",
     )
-    return completion.choices[0].text
+    if (completion.choices[0].message.function_call):
+        if(completion.choices[0].message.function_call.name):
+            return completion
+    return None
 
 
-# chat model
-def getAnswer(chatModelIn, sourcesIn, questionIn):
-    return getCompletion(chatModelIn, "Using: " + sourcesIn + ", answer the following in an appropriate format: '" + questionIn + "'.")
+def getResponse(promptIn):
+    thePrompt = [{"role": "user", "content": promptIn}]
+    completion = getChatFunctionCompletion(thePrompt)
+    
+    if completion is not None:
+        functionName = completion.choices[0].message.function_call.name
+        printDebug("Calling function: " + functionName)
+        functionCall = functionMap[functionName]
+        functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
+        functionOutput = functionCall(
+            keywords = functionArgs.get("keywords"),
+        )
+
+        return functionOutput
+    else:
+        printDebug("No functions for prompt - the response will be completely generated!")
+        return getChat(promptIn)
 
 
-# comp model
-def getSummary(compModelIn, textIn):
-    return getCompletion(compModelIn, "Summarize this: " + textIn)
+def getChat(promptIn):
+    return getChatCompletion(0, promptIn)
 
 
-# comp model
-def getContainsYesOrNo(compModelIn, promptIn, targetIn):
-    return getCompletion(compModelIn, "Answering exclusively with 'yes' or 'no', does '" + promptIn + "' discuss any of the following: " + targetIn + "? Give your response in one word only.")
+def getCompletion(promptIn):
+    return getChatCompletion(1, promptIn)
 
 
-# comp model
-def getSearchTerms(compModelIn, promptIn):
-    return getCompletion(compModelIn, "Determine the topic, then generate a list of three search terms regarding the topic that will be used to search for the following: " + promptIn)
+def getAnswer(promptIn, infoIn):
+    return getChatCompletion(2, promptIn, infoIn)
 
 
-#################################################
-################## BEGIN UTILS ##################
-#################################################
-
-
-def cleanupString(stringIn):
-    out = stringIn.replace("\n", " ").replace("\r", "") # remove all newlines
-    out = ' '.join(stringIn.split()) # remove all redundant spaces
-    out = re.sub(r'[^ \w+]', '', out) # remove all non-standard characters
-    return out
+def getSummary(promptIn):
+    return getChatCompletion(3, promptIn)
 
 
 ##################################################
@@ -416,7 +443,7 @@ while shouldRun:
         strResponse = ""
         printInfo("Generating response...")
         tic = time.perf_counter()
-        strResponse = chatPrompt(strModelChat, strModelCompletion, strPrompt)
+        strResponse = chatPrompt(strPrompt)
         toc = time.perf_counter()
         printSeparator()
         printResponse(strResponse)
