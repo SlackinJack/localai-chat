@@ -1,0 +1,30 @@
+# address of the server
+ADDRESS=http://localhost:8080/v1
+
+# set default chat model
+CHAT_MODEL=samantha-7b
+
+# set default prompt model
+COMPLETION_MODEL=jordan-7b
+
+# max number of sentences to consider
+# when using online sources
+# low values may affect data quality
+# high values will increase processing time
+# remember to (in/de)crease context size
+MAX_SENTENCES=3
+
+
+# max number of sources to consider
+# when using online sources
+# low values may affect data diversity
+# high values will increase processing time
+# remember to (in/de)crease context size 
+MAX_SOURCES=3
+
+# path to models folder
+MODELS_PATH=../models/
+
+# api key (cannot be empty)
+KEY=sx-xxx
+
