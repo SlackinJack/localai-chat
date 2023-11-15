@@ -16,7 +16,8 @@ Current dependencies (may change at any point):
 - BeautifulSoup4
 - duckduckgo_search
 - PyPDF2
+- readability_lxml
 - termcolor
 
 
-Using uncensored-jordan-7b, uncensored-jordan-33b to test.
+Using uncensored-jordan-7b, samantha-7b to test.
