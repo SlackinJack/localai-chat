@@ -14,7 +14,6 @@ COMPLETION_MODEL=jordan-7b
 # remember to (in/de)crease context size
 MAX_SENTENCES=3
 
-
 # max number of sources to consider
 # when using online sources
 # low values may affect data diversity
@@ -28,3 +27,5 @@ MODELS_PATH=../models/
 # api key (cannot be empty)
 KEY=sx-xxx
 
+# use functions
+USE_FUNCTIONS=True

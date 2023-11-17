@@ -2,13 +2,12 @@ import json
 import openai
 import os
 import re
-import requests
 import time
-from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
-from PyPDF2 import PdfReader
-from readability import Document
-from termcolor import colored
+
+# local imports
+from modules.openfile import *
+from modules.search import *
+from modules.utils import *
 
 
 # TODO
@@ -31,7 +30,6 @@ openai.api_base = CONFIG["ADDRESS"]
 openai.api_key = OPENAI_API_KEY = CONFIG["KEY"]
 os.environ["OPENAI_API_KEY"] = CONFIG["KEY"]
 
-
 intMaxSources = int(CONFIG["MAX_SOURCES"])
 intMaxSentences = int(CONFIG["MAX_SENTENCES"])
 folderModels = CONFIG["MODELS_PATH"]
@@ -41,149 +39,57 @@ strModelCompletion = CONFIG["COMPLETION_MODEL"]
 strModels = ""
 
 
+strCurrentPrompt = ""
+
+
 strAnswerTemplate = ""
-with open("answer-template.tmpl", "r") as f:
+with open("templates/answer-template.tmpl", "r") as f:
     for l in f.readlines():
         strAnswerTemplate += l + "\n"
 
 
 strChatTemplate = ""
-with open("chat-template.tmpl", "r") as f:
+with open("templates/chat-template.tmpl", "r") as f:
     for l in f.readlines():
         strChatTemplate += l + "\n"
 
 
 strCompletionTemplate = ""
-with open("completion-template.tmpl", "r") as f:
+with open("templates/completion-template.tmpl", "r") as f:
     for l in f.readlines():
         strCompletionTemplate += l + "\n"
 
 
 strSummaryTemplate = ""
-with open("summary-template.tmpl", "r") as f:
+with open("templates/summary-template.tmpl", "r") as f:
     for l in f.readlines():
         strSummaryTemplate += l + "\n"
 
 
-strCurrentPrompt = ""
-
-
 #################################################
-################## BEGIN UTILS ##################
+################ BEGIN FUNCTIONS ################
 #################################################
-
-
-def getInfoFromWebsite(websiteIn, bypassLength):
-    # if "JavaScript" in websiteText and "cookies" in websiteText:
-    # source.remove(key)
-    # continue
-    website = requests.get(websiteIn)
-    reader = Document(website.content)
-    websiteText = reader.summary()
-    websiteText = re.sub('<[^<]+?>', '', websiteText)
-    websiteText = cleanupString(websiteText)
-    if not bypassLength:
-        i = 0 # chars
-        j = 0 # sentences
-        k = 0 # chars since last sentence
-        global intMaxSentences
-        for char in websiteText:
-            i += 1
-            k += 1
-            if "." == char or "!" == char or "?" == char:
-                j += 1
-                if k < 32:
-                    # sentence is too short to be considered as complete
-                    j -= 1
-                if j == intMaxSentences:
-                    break
-                k = 0
-        websiteText = websiteText[0:i]
-    return websiteText
 
 
 def searchWeb(keywords):
     response = ""
-    sources = dict()
-    global intMaxSources
-    printDebug("Generated serach term: " + keywords)
-    index = 0
-    while True:
-        try:
-            # TODO: add website blacklist filters
-            # TODO: filter websites that ask for js/cookies
-            for result in DDGS().text(keywords, max_results=intMaxSources):
-                sources[index] = result.get("href")
-                index += 1
-            break
-        except:
-            printDebug("Exception thrown while looking up ddg texts, trying again in 5 seconds...")
-            time.sleep(5)
+    printDebug("Generated serach term(s): " + keywords)
+    sources = searchDDG(keywords, intMaxSources)
     compiledSources = ""
     printDebug("Target links: " + str(sources))
     for key in sources:
-        websiteText = getInfoFromWebsite(sources[key], False)
-        
+        websiteText = getInfoFromWebsite(sources[key], False, intMaxSentences)
         printDebug("[" + str(key + 1) + "] " + websiteText)
         compiledSources += "[" + websiteText + "]"
     printDebug("Generating response with sources...")
-    global strModelChat
-    global strCurrentPrompt
     if len(compiledSources) < 1:
         printWarning("No sources compiled - the reply will be completely generated!")
     response = getAnswer(strCurrentPrompt, compiledSources)
-    if len(compiledSources) > 1:
+    if len(compiledSources) >= 1:
         response += "\n\n\nSources considered:\n"
         for key in sources:
             response += "[" + str(key + 1) + "] '" + sources[key] + "\n"
     return response
-
-
-def browse(promptIn):
-    strings = promptIn.split(" ")
-    for s in strings:
-        if s.startswith("http"):
-            newPrompt = promptIn.replace(s, "")
-            return getAnswer(newPrompt, getInfoFromWebsite(s, True))
-
-
-def openFile(promptIn):
-    # TODO: url path to files
-    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
-    newPrompt = promptIn.replace("'" + filePath + "'", "")
-    strFileContents = ""
-    if filePath.endswith(".pdf")
-        # TODO: add option to read entire pdf at once
-        printWarning("PDF support is very primative!")
-        pdfFile = PdfReader(filePath)
-        pdfPages = len(pdfFile.pages)
-        pdfPageSummaries = []
-        i = 0
-        if pdfPages >= 2:
-            # get 2 pages of text each cycle
-            while i < pdfPages:
-                printDebug("Reading page: " + str(i))
-                p = pdfFile.pages[i].extract_text()
-                p2 = ""
-                i1 = i + 1
-                if i1 <= pdfPages:
-                    printDebug("Reading page: " + str(i1))
-                    p2 = pdfFile.pages[i1].extract_text()
-                pdfPageSummaries.append(getSummary(p + "\n" + p2))
-                i = i + 2
-            return getAnswer(newPrompt, pdfPageSummaries)
-        else:
-            # single page pdf
-            printDebug("Reading page: " + str(i))
-            p = pdfFile.pages[i].extract_text()
-            return getAnswer(newPrompt, p)
-    else:
-        # open as text-based file as default
-        f = open(filePath, "r")
-        strFile = f.read()
-        f.close()
-    strFileContents = cleanupString(strFileContents)
-    return getAnswer(promptIn, strFileContents)
 
 
 # functions
@@ -210,6 +116,33 @@ functionMap = {
 }
 
 
+##################################################
+################# BEGIN TRIGGERS #################
+##################################################
+
+
+def browse(promptIn):
+    strings = promptIn.split(" ")
+    for s in strings:
+        if s.startswith("http"):
+            newPrompt = promptIn.replace(s, "")
+            return getAnswer(newPrompt, getInfoFromWebsite(s, True))
+
+
+def openFile(promptIn):
+    # TODO: url path to files
+    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
+    newPrompt = promptIn.replace("'" + filePath + "'", "")
+    strFileContents = ""
+    if filePath.endswith(".pdf"):
+        pdfText = getPDFText(filePath)
+        # TODO: split and parse by sentence length like websites
+    else:
+        strFileContents = getFileText(filePath)
+    strFileContents = cleanupString(strFileContents)
+    return getAnswer(promptIn, strFileContents)
+
+
 # triggers should be used to do specific functions
 triggers = {
     "browse": [
@@ -228,64 +161,9 @@ triggerFunctionMap = {
 }
 
 
-def cleanupString(stringIn):
-    out = stringIn.replace("\n", " ").replace("\r", "")          # remove all newlines
-    out = ' '.join(out.split())                                  # remove all redundant spaces
-    out = (out.encode("ascii", errors="ignore")).decode()        # drop all non-ascii chars
-    return out
-
-
-# https://pypi.org/project/termcolor/
-
-
-def printInput(string):
-    strInput = input(colored(string, "white", attrs=["bold"]))
-    return strInput
-
-
-def printInfo(string):
-    print(colored(string, "yellow"))
-
-
-def printResponse(string):
-    print(colored(string, "green"))
-
-
-def printGeneric(string):
-    print(colored(string, "light_grey"))
-
-
-def printWarning(string):
-    print(colored(string, "red"))
-
-
-def printSuccess(string):
-    print(colored(string, "green"))
-
-
-def printDebug(string):
-    print(colored(string, "light_grey"))
-
-
-def printSeparator():
-    printGeneric("-------------------------------------------------------------")
-
-
-def detectModels():
-    modelsList = []
-    modelsBuilder = ""
-    for fileName in os.listdir(folderModels):
-        if fileName.endswith(".yaml"):
-            strModelName = fileName.split(".")
-            modelsList.append(strModelName[0])
-    i = 0
-    while i < len(modelsList):
-        if i + 1 == len(modelsList):
-            modelsBuilder = modelsBuilder + modelsList[i]
-        else:
-            modelsBuilder = modelsBuilder + modelsList[i] + ", "
-        i += 1
-    return modelsBuilder
+##################################################
+################# BEGIN COMMANDS #################
+##################################################
 
 
 def helpCommand():
@@ -301,6 +179,11 @@ def modelCommand(mode, currentModel):
         model = currentModel
     printSuccess(mode + " model set to: " + model)
     return model
+
+
+#################################################
+############### BEGIN COMPLETIONS ###############
+#################################################
 
 
 def getActionFromPrompt(promptIn):
@@ -323,10 +206,6 @@ def chatPrompt(promptIn):
         response = functionCall(promptIn)
     strCurrentPrompt = ""
     return response
-
-#################################################
-############### BEGIN COMPLETIONS ###############
-#################################################
 
 
 def getChatCompletion(templateMode, input1, input2=None):
@@ -364,23 +243,24 @@ def getChatCompletion(templateMode, input1, input2=None):
 
 
 def getChatFunctionCompletion(promptIn):
-    global strModelCompletion
     completion = openai.ChatCompletion.create(
         model = strModelCompletion,
         messages = promptIn,
         functions = availableFunctions,
         function_call = "auto",
     )
-    if (completion.choices[0].message.function_call):
-        if(completion.choices[0].message.function_call.name):
-            return completion
+    try:
+        if (completion.choices[0].message.function_call):
+            if(completion.choices[0].message.function_call.name):
+                return completion
+    except:
+        return None
     return None
 
 
 def getResponse(promptIn):
     thePrompt = [{"role": "user", "content": promptIn}]
     completion = getChatFunctionCompletion(thePrompt)
-    
     if completion is not None:
         functionName = completion.choices[0].message.function_call.name
         printDebug("Calling function: " + functionName)
@@ -417,7 +297,7 @@ def getSummary(promptIn):
 ##################################################
 
 
-strModels = detectModels()
+strModels = detectModels(folderModels)
 strDefaultModel = strModels.split(",")[0]
 if len(strModelChat) == 0:
     strModelChat = strDefaultModel
