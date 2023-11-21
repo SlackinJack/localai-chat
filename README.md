@@ -23,6 +23,7 @@ Current dependencies (may change at any point):
 Road map and targets (mostly for myself):
 - add function-less triggers back, check compat with other models
 - upload/download files, stablediffusion support, maybe tts support (if i get it working on my end)
+- add word-streaming
 
 
 Using uncensored-jordan-7b, samantha-7b to test.
