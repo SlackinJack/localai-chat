@@ -20,4 +20,9 @@ Current dependencies (may change at any point):
 - termcolor
 
 
+Road map and targets (mostly for myself):
+- add function-less triggers back, check compat with other models
+- upload/download files, stablediffusion support, maybe tts support (if i get it working on my end)
+
+
 Using uncensored-jordan-7b, samantha-7b to test.
