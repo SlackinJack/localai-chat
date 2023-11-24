@@ -49,13 +49,15 @@ def cleanupString(stringIn):
     return out
 
 
-def detectModels(pathtomodels):
+def detectModels(pathtomodels, ignoredModelsIn):
     modelsList = []
     modelsBuilder = ""
+    ignoredModelsList = ignoredModelsIn.split(",")
     for fileName in os.listdir(pathtomodels):
         if fileName.endswith(".yaml"):
             strModelName = fileName.split(".")
-            modelsList.append(strModelName[0])
+            if strModelName[0] not in ignoredModelsList:
+                modelsList.append(strModelName[0])
     i = 0
     while i < len(modelsList):
         if i + 1 == len(modelsList):

@@ -10,9 +10,13 @@ from modules.search import *
 from modules.utils import *
 
 
-# TODO
-# determine topic, research topic, formulate educated answer based on topic
-# add conversation context
+strModels = ""
+strDefaultModel = ""
+
+
+#################################################
+############## BEGIN CONFIGURATION ##############
+#################################################
 
 
 fileConfig = open("config.txt", "r")
@@ -33,13 +37,15 @@ os.environ["OPENAI_API_KEY"] = CONFIG["KEY"]
 intMaxSources = int(CONFIG["MAX_SOURCES"])
 intMaxSentences = int(CONFIG["MAX_SENTENCES"])
 folderModels = CONFIG["MODELS_PATH"]
-strDefaultModel = ""
 strModelChat = CONFIG["CHAT_MODEL"]
 strModelCompletion = CONFIG["COMPLETION_MODEL"]
-strModels = ""
+strIgnoredModels = CONFIG["IGNORED_MODELS"]
+shouldUseFunctions = (CONFIG["ENABLE_FUNCTIONS"] == "True")
 
 
-strCurrentPrompt = ""
+#################################################
+################ BEGIN TEMPLATES ################
+#################################################
 
 
 strAnswerTemplate = ""
@@ -66,46 +72,44 @@ with open("templates/summary-template.tmpl", "r") as f:
         strSummaryTemplate += l + "\n"
 
 
+strTopicTemplate = ""
+with open("templates/topic-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strTopicTemplate += l + "\n"
+
+
 #################################################
 ################ BEGIN FUNCTIONS ################
 #################################################
 
 
-def searchWeb(keywords):
-    response = ""
-    printDebug("Generated serach term(s): " + keywords)
-    sources = searchDDG(keywords, intMaxSources)
-    compiledSources = ""
-    printDebug("Target links: " + str(sources))
-    for key in sources:
-        websiteText = getInfoFromWebsite(sources[key], False, intMaxSentences)
-        printDebug("[" + str(key + 1) + "] " + websiteText)
-        compiledSources += "[" + websiteText + "]"
-    printDebug("Generating response with sources...")
-    if len(compiledSources) < 1:
-        printWarning("No sources compiled - the reply will be completely generated!")
-    response = getAnswer(strCurrentPrompt, compiledSources)
-    if len(compiledSources) >= 1:
-        response += "\n\n\nSources considered:\n"
-        for key in sources:
-            response += "[" + str(key + 1) + "] '" + sources[key] + "\n"
-    return response
+def searchWeb(prompt, keywords):
+    response = getSearchResponse(keywords, intMaxSources)
+    textResponse = response[0]
+    sourceResponse = response[1]
+    if len(response) < 1:
+        return getChat(prompt)
+    else:
+        return getAnswer(prompt, textResponse, sourceResponse)
 
 
-# functions
 availableFunctions = [
     {
         "name": "searchWeb",
-        "description": "Search for uncommon information. Searchable topics: news, people, locations, products and services.",
+        "description": "Search exclusively for these topics: news, people, locations, products and services.",
         "parameters": {
             "type": "object",
             "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The prompt given by the user."
+                },
                 "keywords": {
                     "type": "string",
                     "description": "The topic or subject of the prompt.",
                 },
             },
-            "required": ["keywords"],
+            "required": ["prompt", "keywords"],
         },
     }
 ]
@@ -113,6 +117,27 @@ availableFunctions = [
 
 functionMap = {
     "searchWeb": searchWeb,
+}
+
+
+##################################################
+################# BEGIN KEYWORDS #################
+##################################################
+
+
+def search(promptIn):
+    keywords = getTopic(promptIn)
+    response = getSearchResponse(keywords, intMaxSources)
+    textResponse = response[0]
+    sourceResponse = response[1]
+    if len(response) < 1:
+        return getChat(promptIn)
+    else:
+        return getAnswer(promptIn, textResponse, sourceResponse)
+
+
+keywordsMap = {
+    "search": search,
 }
 
 
@@ -126,7 +151,11 @@ def browse(promptIn):
     for s in strings:
         if s.startswith("http"):
             newPrompt = promptIn.replace(s, "")
-            return getAnswer(newPrompt, getInfoFromWebsite(s, True))
+            websiteText = getInfoFromWebsite(s, True)
+            if websiteText is not None:
+                return getAnswer(newPrompt, websiteText)
+            else:
+                return ""
 
 
 def openFile(promptIn):
@@ -146,8 +175,8 @@ def openFile(promptIn):
 # triggers should be used to do specific functions
 triggers = {
     "browse": [
-    "http:",
-    "https:"
+    "http://",
+    "https://"
     ],
     "openFile": [
     "'/"
@@ -186,66 +215,57 @@ def modelCommand(mode, currentModel):
 #################################################
 
 
+def chatPrompt(promptIn):
+    action = getActionFromPrompt(promptIn)
+    response = ""
+    if action == "none":
+        response = getResponse(promptIn)
+    else:
+        functionCall = triggerFunctionMap[action]
+        response = functionCall(promptIn)
+    return response
+
+
 def getActionFromPrompt(promptIn):
     for key in triggers:
         for value in triggers[key]:
             if value in promptIn:
                 return key
-    return "default"
+    return "none"
 
 
-def chatPrompt(promptIn):
-    global strCurrentPrompt
-    strCurrentPrompt = promptIn
-    action = getActionFromPrompt(promptIn)
-    response = ""
-    if action == "default":
-        response = getResponse(promptIn)
+def getResponse(promptIn):
+    if not shouldUseFunctions:
+        printDebug("Using keywords...")
+        if promptIn.startswith("search ") or promptIn.startswith("search for "):
+            printDebug("Searching for prompt...")
+            keywords = getTopic(promptIn.replace("search for ", "").replace("search ", ""))
+            printDebug("Generated keywords: " + keywords)
+            return searchWeb(promptIn, keywords)
+        else:
+            printDebug("No keywords detected, generating chat output...")
+            return getChat(promptIn)
     else:
-        functionCall = triggerFunctionMap[action]
-        response = functionCall(promptIn)
-    strCurrentPrompt = ""
-    return response
-
-
-def getChatCompletion(templateMode, input1, input2=None):
-    global strModelChat
-    global strModelCompletion
-    global strChatTemplate                 #0
-    global strCompletionTemplate           #1
-    global strAnswerTemplate               #2
-    global strSummaryTemplate              #3
-    strTemplatedPrompt = ""
-    strModelToUse = ""
-    match templateMode:
-        case 1:
-            strTemplatedPrompt = strCompletionTemplate.replace("{{.Input}}", input1)
-            strModelToUse = strModelCompletion
-        case 2:
-            strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", input1).replace("{{.Input2}}", input2)
-            strModelToUse = strModelCompletion
-        case 3:
-            strTemplatedPrompt = strSummaryTemplate.replace("{{.Input}}", input1)
-            strModelToUse = strModelCompletion
-        case _: # and case 0:
-            strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", input1)
-            strModelToUse = strModelChat
-    completion = openai.ChatCompletion.create(
-        model = strModelToUse,
-        messages = [
-            {
-                "role": "user",
-                "content": strTemplatedPrompt
-            }
-        ]
-    )
-    return completion.choices[0].message.content
+        completion = getChatFunctionCompletion(promptIn)
+        if completion is not None:
+            functionName = completion.choices[0].message.function_call.name
+            printDebug("Calling function: " + functionName)
+            functionCall = functionMap[functionName]
+            functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
+            functionOutput = functionCall(
+                prompt = functionArgs.get("prompt"),
+                keywords = functionArgs.get("keywords"),
+            )
+            return functionOutput
+        else:
+            printDebug("No functions for prompt - the response will be completely generated!")
+            return getChat(promptIn)
 
 
 def getChatFunctionCompletion(promptIn):
     completion = openai.ChatCompletion.create(
         model = strModelCompletion,
-        messages = promptIn,
+        messages = [{"role": "system", "content": promptIn}],
         functions = availableFunctions,
         function_call = "auto",
     )
@@ -258,22 +278,60 @@ def getChatFunctionCompletion(promptIn):
     return None
 
 
-def getResponse(promptIn):
-    thePrompt = [{"role": "user", "content": promptIn}]
-    completion = getChatFunctionCompletion(thePrompt)
-    if completion is not None:
-        functionName = completion.choices[0].message.function_call.name
-        printDebug("Calling function: " + functionName)
-        functionCall = functionMap[functionName]
-        functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
-        functionOutput = functionCall(
-            keywords = functionArgs.get("keywords"),
-        )
-
-        return functionOutput
+def getChatCompletion(templateMode, promptIn, infoIn=None, sources=None):
+    global strChatTemplate                 #0 - chat
+    global strCompletionTemplate           #1 - completion
+    global strAnswerTemplate               #2 - completion
+    global strSummaryTemplate              #3 - completion
+    global strTopicTemplate                #4 - completion
+    strTemplatedPrompt = ""
+    strModelToUse = strModelCompletion
+    match templateMode:
+        case 0:
+            strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
+            strModelToUse = strModelChat
+        case 1:
+            strTemplatedPrompt = strCompletionTemplate.replace("{{.Input}}", promptIn)
+        case 2:
+            strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
+        case 3:
+            strTemplatedPrompt = strSummaryTemplate.replace("{{.Input}}", promptIn)
+        case 4:
+            strTemplatedPrompt = strTopicTemplate.replace("{{.Input}}", promptIn)
+        case _:
+            strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
+            strModelToUse = strModelChat
+    strSystem = ""
+    strUser = ""
+    strAssistant = ""
+    for line in strTemplatedPrompt.split("\n"):
+        if line.startswith("SYSTEM:"):
+            strSystem = line.replace("SYSTEM:", "")
+        elif line.startswith("USER:"):
+            strUser = line.replace("USER:", "")
+        elif line.startswith("ASSISTANT:"):
+            strAssistant = line.replace("ASSISTANT:", "")
+    completion = openai.ChatCompletion.create(
+        model = strModelToUse,
+        messages = [
+            {
+                "role": "system",
+                "content": strSystem,
+            },
+            {
+                "role": "user",
+                "content": strUser,
+            },
+            {
+                "role": "assistant",
+                "content": strAssistant,
+            },
+        ],
+    )
+    if sources is not None:
+        return completion.choices[0].message.content + "\n\n\n" + sources
     else:
-        printDebug("No functions for prompt - the response will be completely generated!")
-        return getChat(promptIn)
+        return completion.choices[0].message.content
 
 
 def getChat(promptIn):
@@ -284,12 +342,16 @@ def getCompletion(promptIn):
     return getChatCompletion(1, promptIn)
 
 
-def getAnswer(promptIn, infoIn):
-    return getChatCompletion(2, promptIn, infoIn)
+def getAnswer(promptIn, infoIn, sourcesIn=None):
+    return getChatCompletion(2, promptIn, infoIn, sourcesIn)
 
 
 def getSummary(promptIn):
     return getChatCompletion(3, promptIn)
+
+
+def getTopic(promptIn):
+    return getChatCompletion(4, promptIn)
 
 
 ##################################################
@@ -297,8 +359,8 @@ def getSummary(promptIn):
 ##################################################
 
 
-strModels = detectModels(folderModels)
-strDefaultModel = strModels.split(",")[0]
+strModels = detectModels(folderModels, strIgnoredModels)
+strDefaultModel = strModels.split(", ")[0]
 if len(strModelChat) == 0:
     strModelChat = strDefaultModel
 if len(strModelCompletion) == 0:
@@ -328,4 +390,3 @@ while shouldRun:
         printSeparator()
         printResponse(strResponse)
         printDebug(f"\n\n{toc - tic:0.3f} seconds")
-printInput("Press enter to exit...")

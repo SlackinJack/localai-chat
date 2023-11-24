@@ -1,11 +1,23 @@
 # address of the server
 ADDRESS=http://localhost:8080/v1
 
+
 # set default chat model
-CHAT_MODEL=samantha-7b
+CHAT_MODEL=jordan-7b
+
 
 # set default prompt model
 COMPLETION_MODEL=jordan-7b
+
+
+# models to hide in list (stablediffusion models, etc.)
+IGNORED_MODELS=stablediffusion,lunademo,example
+
+
+# enable functions
+# disable for hotwords [search (for), etc.]
+ENABLE_FUNCTIONS=True
+
 
 # max number of sentences to consider
 # when using online sources
@@ -14,6 +26,7 @@ COMPLETION_MODEL=jordan-7b
 # remember to (in/de)crease context size
 MAX_SENTENCES=3
 
+
 # max number of sources to consider
 # when using online sources
 # low values may affect data diversity
@@ -21,11 +34,11 @@ MAX_SENTENCES=3
 # remember to (in/de)crease context size 
 MAX_SOURCES=3
 
+
 # path to models folder
 MODELS_PATH=../models/
+
 
 # api key (cannot be empty)
 KEY=sx-xxx
 
-# use functions
-USE_FUNCTIONS=True
