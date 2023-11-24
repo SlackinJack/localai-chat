@@ -1,8 +1,8 @@
 # localai-chat
 
-**Working: Very broken and extremely slow**
+**Working: Kind of, but extremely slow**
 
-Very barebones basic front-end for LocalAI written in Python3
+Very barebones & basic front-end for LocalAI written in Python3
 
 Current features (may change at any point):
 - Paste weblinks into the prompt and interact with just about any website that has text. (very slow)
@@ -13,7 +13,6 @@ Current features (may change at any point):
 
 
 Current dependencies (may change at any point):
-- BeautifulSoup4
 - duckduckgo_search
 - PyPDF2
 - readability_lxml
@@ -21,7 +20,6 @@ Current dependencies (may change at any point):
 
 
 Road map and targets (mostly for myself):
-- add function-less triggers back, check compat with other models
 - upload/download files, stablediffusion support, maybe tts support (if i get it working on my end)
 - add word-streaming
 
