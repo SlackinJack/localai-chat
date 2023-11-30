@@ -22,6 +22,9 @@ Current dependencies (may change at any point):
 Road map and targets (mostly for myself):
 - upload/download files, stablediffusion support, maybe tts support (if i get it working on my end)
 - add word-streaming
+- main.py > triggers > openFile > support other OS
+- utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
+- search.py > getInfoFromWebsite > add timeout
 
 
-Using uncensored-jordan-7b, samantha-7b to test.
+Using uncensored-jordan-7b to test.
