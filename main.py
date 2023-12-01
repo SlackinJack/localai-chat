@@ -147,8 +147,10 @@ def browse(promptIn):
 
 
 def openFile(promptIn):
-    strFileContents = getFileContents(promptIn)
-    return getAnswer(promptIn, strFileContents)
+    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
+    newPrompt = promptIn.replace("'" + filePath + "'", "")
+    strFileContents = getFileContents(filePath)
+    return getAnswer(newPrompt, strFileContents)
 
 
 triggers = {

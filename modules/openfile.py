@@ -3,13 +3,13 @@ import random
 import re
 import urllib
 
+from pptx import Presentation
 from PyPDF2 import PdfReader
 
 from modules.utils import *
 
 
 def getPDFText(filePath):
-    printInfo("PDF support is very primative!")
     pdfFile = PdfReader(filePath)
     pdfPages = len(pdfFile.pages)
     pdfText = ""
@@ -24,6 +24,15 @@ def getDOCXText(filePath):
     return docx2txt.process(filePath)
 
 
+def getPPTXText(filePath):
+    content = ""
+    pres = Presentation(filePath)
+    for slide in pres.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text"):
+                content += shape.text + " "
+    return content
+
 def getFileText(filePath):
     f = open(filePath, "r")
     content = f.read()
@@ -34,11 +43,11 @@ def getFileText(filePath):
 fileMap = {
     "pdf": getPDFText,
     "docx": getDOCXText,
+    "pptx": getPPTXText,
 }
 
-def getFileContents(promptIn):
-    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
-    newPrompt = promptIn.replace("'" + filePath + "'", "")
+
+def getFileContents(filePath):
     k = filePath.split(".")
     fileExtension = k[len(k) - 1]
     content = ""
@@ -48,3 +57,4 @@ def getFileContents(promptIn):
     else:
         content = getFileText(filePath)
     return cleanupString(content)
+
