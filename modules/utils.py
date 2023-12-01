@@ -2,9 +2,22 @@ import os
 
 from termcolor import colored
 
+
+configuration = dict()
+
+
+def initConfig(fileConfiguration):
+    for line in fileConfiguration:
+        if len(line) > 0 and not line.startswith("#"):
+            key = line.split("=")[0]
+            value = line.split("=")[1]
+            configuration[key] = value
+
+
 ################################################
 ################## BEGIN CHAT ##################
 ################################################
+
 
 # https://pypi.org/project/termcolor/
 
@@ -15,7 +28,8 @@ def printInput(string):
 
 
 def printInfo(string):
-    print(colored(string, "yellow"))
+    if int(configuration["DEBUG_LEVEL"]) >= 2:
+        print(colored(string, "yellow"))
 
 
 def printResponse(string):
@@ -26,8 +40,9 @@ def printGeneric(string):
     print(colored(string, "light_grey"))
 
 
-def printWarning(string):
-    print(colored(string, "red"))
+def printError(string):
+    if int(configuration["DEBUG_LEVEL"]) >= 1:
+        print(colored(string, "red"))
 
 
 def printSuccess(string):
@@ -35,7 +50,8 @@ def printSuccess(string):
 
 
 def printDebug(string):
-    print(colored(string, "light_grey"))
+    if int(configuration["DEBUG_LEVEL"]) >= 3:
+        print(colored(string, "light_grey"))
 
 
 def printSeparator():
@@ -47,25 +63,6 @@ def cleanupString(stringIn):
     out = ' '.join(out.split())                                  # remove all redundant spaces
     out = (out.encode("ascii", errors="ignore")).decode()        # drop all non-ascii chars
     return out
-
-
-def detectModels(pathtomodels, ignoredModelsIn):
-    modelsList = []
-    modelsBuilder = ""
-    ignoredModelsList = ignoredModelsIn.split(",")
-    for fileName in os.listdir(pathtomodels):
-        if fileName.endswith(".yaml"):
-            strModelName = fileName.split(".")
-            if strModelName[0] not in ignoredModelsList:
-                modelsList.append(strModelName[0])
-    i = 0
-    while i < len(modelsList):
-        if i + 1 == len(modelsList):
-            modelsBuilder = modelsBuilder + modelsList[i]
-        else:
-            modelsBuilder = modelsBuilder + modelsList[i] + ", "
-        i += 1
-    return modelsBuilder
 
 
 def splitBySentenceLength(textIn, maxLength):
@@ -89,3 +86,4 @@ def splitBySentenceLength(textIn, maxLength):
                     i = j = 0
                 k = 0
     return output
+

@@ -10,7 +10,7 @@ from modules.search import *
 from modules.utils import *
 
 
-strModels = ""
+listModels = []
 strDefaultModel = ""
 
 
@@ -18,17 +18,11 @@ strDefaultModel = ""
 ############## BEGIN CONFIGURATION ##############
 #################################################
 
-
 fileConfig = open("config.txt", "r")
 fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
-CONFIG = dict()
-for line in fileConfiguration:
-    if len(line) > 0 and not line.startswith("#"):
-        key = line.split("=")[0]
-        value = line.split("=")[1]
-        CONFIG[key] = value
-
+initConfig(fileConfiguration)
+CONFIG = configuration
 
 openai.api_base = CONFIG["ADDRESS"]
 openai.api_key = OPENAI_API_KEY = CONFIG["KEY"]
@@ -125,19 +119,14 @@ functionMap = {
 ##################################################
 
 
-def search(promptIn):
+def keyword_search(promptIn):
     keywords = getTopic(promptIn)
-    response = getSearchResponse(keywords, intMaxSources)
-    textResponse = response[0]
-    sourceResponse = response[1]
-    if len(response) < 1:
-        return getChat(promptIn)
-    else:
-        return getAnswer(promptIn, textResponse, sourceResponse)
+    return searchWeb(promptIn, keywords)
 
 
 keywordsMap = {
-    "search": search,
+    "search for ": keyword_search,
+    "search ": keyword_search,
 }
 
 
@@ -159,20 +148,17 @@ def browse(promptIn):
 
 
 def openFile(promptIn):
-    # TODO: url path to files
     filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
     newPrompt = promptIn.replace("'" + filePath + "'", "")
     strFileContents = ""
     if filePath.endswith(".pdf"):
         pdfText = getPDFText(filePath)
-        # TODO: split and parse by sentence length like websites
     else:
         strFileContents = getFileText(filePath)
     strFileContents = cleanupString(strFileContents)
     return getAnswer(promptIn, strFileContents)
 
 
-# triggers should be used to do specific functions
 triggers = {
     "browse": [
     "http://",
@@ -202,7 +188,7 @@ def helpCommand():
 
 
 def modelCommand(mode, currentModel):
-    printInfo("Available models: " + strModels)
+    printInfo("Available models: " + str(listModels))
     model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
     if len(model) == 0:
         model = currentModel
@@ -216,8 +202,12 @@ def modelCommand(mode, currentModel):
 
 
 def chatPrompt(promptIn):
-    action = getActionFromPrompt(promptIn)
     response = ""
+    action = "none"
+    for key in triggers:
+        for value in triggers[key]:
+            if value in promptIn:
+                action = key
     if action == "none":
         response = getResponse(promptIn)
     else:
@@ -226,25 +216,15 @@ def chatPrompt(promptIn):
     return response
 
 
-def getActionFromPrompt(promptIn):
-    for key in triggers:
-        for value in triggers[key]:
-            if value in promptIn:
-                return key
-    return "none"
-
-
 def getResponse(promptIn):
     if not shouldUseFunctions:
-        printDebug("Using keywords...")
-        if promptIn.startswith("search ") or promptIn.startswith("search for "):
-            printDebug("Searching for prompt...")
-            keywords = getTopic(promptIn.replace("search for ", "").replace("search ", ""))
-            printDebug("Generated keywords: " + keywords)
-            return searchWeb(promptIn, keywords)
-        else:
-            printDebug("No keywords detected, generating chat output...")
-            return getChat(promptIn)
+        printInfo("Using keywords...")
+        for key in keywordsMap:
+            if promptIn.startswith(key):
+                functionCall = keywordsMap[key]
+                return functionCall(promptIn.replace(key, ""))
+        printInfo("No keywords detected, generating chat output...")
+        return getChat(promptIn)
     else:
         completion = getChatFunctionCompletion(promptIn)
         if completion is not None:
@@ -311,27 +291,33 @@ def getChatCompletion(templateMode, promptIn, infoIn=None, sources=None):
             strUser = line.replace("USER:", "")
         elif line.startswith("ASSISTANT:"):
             strAssistant = line.replace("ASSISTANT:", "")
-    completion = openai.ChatCompletion.create(
-        model = strModelToUse,
-        messages = [
-            {
-                "role": "system",
-                "content": strSystem,
-            },
-            {
-                "role": "user",
-                "content": strUser,
-            },
-            {
-                "role": "assistant",
-                "content": strAssistant,
-            },
-        ],
-    )
-    if sources is not None:
-        return completion.choices[0].message.content + "\n\n\n" + sources
-    else:
-        return completion.choices[0].message.content
+    printDebug("Prompt (after templating):\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
+    try:
+        completion = openai.ChatCompletion.create(
+            model = strModelToUse,
+            messages = [
+                {
+                    "role": "system",
+                    "content": strSystem,
+                },
+                {
+                    "role": "user",
+                    "content": strUser,
+                },
+                {
+                    "role": "assistant",
+                    "content": strAssistant,
+                },
+            ],
+        )
+        
+        if sources is not None:
+            return completion.choices[0].message.content + "\n\n\n" + sources
+        else:
+            return completion.choices[0].message.content
+    except:
+        printError("Failed to connect to LocalAI! (Check your connection?)")
+        return ""
 
 
 def getChat(promptIn):
@@ -354,17 +340,22 @@ def getTopic(promptIn):
     return getChatCompletion(4, promptIn)
 
 
+def detectModelsNew():
+    modelList = openai.Model.list()
+    for model in modelList["data"]:
+        listModels.append(model["id"])
+
+
 ##################################################
 ################### BEGIN CHAT ###################
 ##################################################
 
 
-strModels = detectModels(folderModels, strIgnoredModels)
-strDefaultModel = strModels.split(", ")[0]
+detectModelsNew()
 if len(strModelChat) == 0:
-    strModelChat = strDefaultModel
+    strModelChat = listModels[0]
 if len(strModelCompletion) == 0:
-    strModelCompletion = strDefaultModel
+    strModelCompletion = listModels[0]
 printInfo("Chat model ('chatmodel' to change): " + strModelChat)
 printInfo("Comp model ('compmodel' to change): " + strModelCompletion)
 shouldRun = True
@@ -372,7 +363,6 @@ while shouldRun:
     printSeparator()
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()
-
     if len(strPrompt) == 0 or strPrompt.isspace() or strPrompt == "help":
         helpCommand()
     elif strPrompt == "exit" or strPrompt == "quit":

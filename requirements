@@ -1,0 +1,6 @@
+openai==0.28.0
+PyPDF2
+duckduckgo_search
+readability-lxml
+termcolor
+

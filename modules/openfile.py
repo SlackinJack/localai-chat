@@ -1,9 +1,12 @@
+import random
+import urllib
+
 from PyPDF2 import PdfReader
 
 from modules.utils import *
 
 def getPDFText(pathtofile):
-    printWarning("PDF support is very primative!")
+    printInfo("PDF support is very primative!")
     pdfFile = PdfReader(pathtofile)
     pdfPages = len(pdfFile.pages)
     pdfText = ""
@@ -17,3 +20,4 @@ def getFileText(pathtofile):
     content = f.read()
     f.close()
     return content
+
