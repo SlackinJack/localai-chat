@@ -31,7 +31,7 @@ IGNORED_MODELS=stablediffusion,assets,configs,lunademo,example,test
 
 # enable functions
 # disable for hotwords [search (for), etc.]
-ENABLE_FUNCTIONS=False
+ENABLE_FUNCTIONS=True
 
 
 # max number of sentences to consider
@@ -50,12 +50,13 @@ MAX_SENTENCES=4
 MAX_SOURCES=3
 
 
-# path to models folder
-MODELS_PATH=../models/
-
-
 # api key (cannot be empty)
 KEY=sx-xxx
+
+
+# automatically open files on completion
+# eg. generated images, audio files, etc.
+AUTO_OPEN_FILES=True
 
 
 #################################################

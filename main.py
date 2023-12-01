@@ -30,11 +30,11 @@ os.environ["OPENAI_API_KEY"] = configuration["KEY"]
 
 intMaxSources = int(configuration["MAX_SOURCES"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
-folderModels = configuration["MODELS_PATH"]
 strModelChat = configuration["CHAT_MODEL"]
 strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
 shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
+shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
@@ -79,18 +79,22 @@ with open("templates/topic-template.tmpl", "r") as f:
 #################################################
 
 
-def searchWeb(prompt, keywords):
-    response = getSearchResponse(keywords, intMaxSources)
+#def searchWeb(prompt, keywords):
+def searchWeb(args):
+    arg1 = args["prompt"]
+    arg2 = args["keywords"]
+    response = getSearchResponse(arg2, intMaxSources)
     textResponse = response[0]
     sourceResponse = response[1]
     if len(response) < 1:
-        return getChat(prompt)
+        return getChat(arg1)
     else:
-        return getAnswer(prompt, textResponse, sourceResponse)
+        return getAnswer(arg1, textResponse, sourceResponse)
 
 
-def generateImage(prompt):
-    return getImageResponse(prompt)
+def generateImage(args):
+    arg1 = args["prompt"]
+    return getImageResponse(arg1)
 
 
 availableFunctions = [
@@ -141,12 +145,20 @@ functionMap = {
 
 
 def keyword_search(promptIn):
-    keywords = getTopic(promptIn)
-    return searchWeb(promptIn, keywords)
+    return searchWeb(
+        {
+            "prompt": promptIn,
+            "keywords": getTopic(promptIn),
+        }
+    )
 
 
 def keyword_generate(promptIn):
-    return generateImage(promptIn)
+    return generateImage(
+        {
+            "prompt": promptIn,
+        }
+    )
 
 keywordsMap = {
     keyword_search: [
@@ -220,6 +232,7 @@ def helpCommand():
     printInfo("Available commands: ")
     printGeneric("chatmodel")
     printGeneric("compmodel")
+    printGeneric("sdmodel")
     printGeneric("exit/quit")
 
 
@@ -276,10 +289,11 @@ def getResponse(promptIn):
             printDebug("Calling function: " + functionName)
             functionCall = functionMap[functionName]
             functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
-            functionOutput = functionCall(
-                prompt = functionArgs.get("prompt"),
-                keywords = functionArgs.get("keywords"),
-            )
+            #functionOutput = functionCall(
+            #    prompt = functionArgs.get("prompt"),
+            #    keywords = functionArgs.get("keywords"),
+            #)
+            functionOutput = functionCall(functionArgs)
             return functionOutput
         else:
             printDebug("No functions for prompt - the response will be completely generated!")
@@ -395,7 +409,8 @@ def getImageResponse(promptIn):
     split = theURL.split("/")
     filename = split[len(split) - 1]
     urllib.request.urlretrieve(theURL, filename)
-    openLocalFile(filename)
+    if shouldAutomaticallyOpenFiles:
+        openLocalFile(filename)
     return "Your image is available at:\n\n" + completion.data[0].url
 
 
