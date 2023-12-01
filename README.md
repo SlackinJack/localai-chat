@@ -6,7 +6,7 @@ Very barebones & basic front-end for LocalAI written in Python3
 
 Current features (may change at any point):
 - Paste weblinks into the prompt and interact with just about any website that has text.
-- Read PDFs, DOCX, or raw text files, and can summarize content.
+- Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
 - Search duckduckgo based on generated search terms from your prompt, then answer your prompt based on what it found. (With sources!)
 - Generate responses only when appropriate (at least thats the goal anyway)
 - Autodetect, and change models on-the-fly
