@@ -22,19 +22,18 @@ fileConfig = open("config.txt", "r")
 fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
 initConfig(fileConfiguration)
-CONFIG = configuration
 
-openai.api_base = CONFIG["ADDRESS"]
-openai.api_key = OPENAI_API_KEY = CONFIG["KEY"]
-os.environ["OPENAI_API_KEY"] = CONFIG["KEY"]
+openai.api_base = configuration["ADDRESS"]
+openai.api_key = OPENAI_API_KEY = configuration["KEY"]
+os.environ["OPENAI_API_KEY"] = configuration["KEY"]
 
-intMaxSources = int(CONFIG["MAX_SOURCES"])
-intMaxSentences = int(CONFIG["MAX_SENTENCES"])
-folderModels = CONFIG["MODELS_PATH"]
-strModelChat = CONFIG["CHAT_MODEL"]
-strModelCompletion = CONFIG["COMPLETION_MODEL"]
-strIgnoredModels = CONFIG["IGNORED_MODELS"]
-shouldUseFunctions = (CONFIG["ENABLE_FUNCTIONS"] == "True")
+intMaxSources = int(configuration["MAX_SOURCES"])
+intMaxSentences = int(configuration["MAX_SENTENCES"])
+folderModels = configuration["MODELS_PATH"]
+strModelChat = configuration["CHAT_MODEL"]
+strModelCompletion = configuration["COMPLETION_MODEL"]
+strIgnoredModels = configuration["IGNORED_MODELS"]
+shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
 
 
 #################################################
@@ -148,14 +147,7 @@ def browse(promptIn):
 
 
 def openFile(promptIn):
-    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
-    newPrompt = promptIn.replace("'" + filePath + "'", "")
-    strFileContents = ""
-    if filePath.endswith(".pdf"):
-        pdfText = getPDFText(filePath)
-    else:
-        strFileContents = getFileText(filePath)
-    strFileContents = cleanupString(strFileContents)
+    strFileContents = getFileContents(promptIn)
     return getAnswer(promptIn, strFileContents)
 
 
@@ -183,7 +175,8 @@ triggerFunctionMap = {
 
 def helpCommand():
     printInfo("Available commands: ")
-    printGeneric("model")
+    printGeneric("chatmodel")
+    printGeneric("compmodel")
     printGeneric("exit/quit")
 
 
@@ -343,7 +336,9 @@ def getTopic(promptIn):
 def detectModelsNew():
     modelList = openai.Model.list()
     for model in modelList["data"]:
-        listModels.append(model["id"])
+        modelName = model["id"]
+        if modelName not in strIgnoredModels:
+            listModels.append(modelName)
 
 
 ##################################################

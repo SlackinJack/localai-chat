@@ -21,12 +21,12 @@ DEBUG_LEVEL=3
 
 
 # models to ignore (stablediffusion models, folders, etc.)
-IGNORED_MODELS=stablediffusion,assets,configs,lunademo,example
+IGNORED_MODELS=stablediffusion,assets,configs,lunademo,example,test
 
 
 # enable functions
 # disable for hotwords [search (for), etc.]
-ENABLE_FUNCTIONS=True
+ENABLE_FUNCTIONS=False
 
 
 # max number of sentences to consider
