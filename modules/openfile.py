@@ -1,9 +1,12 @@
 import docx2txt
+import os
+import speech_recognition
 import random
 import re
 import urllib
 
 from pptx import Presentation
+from pydub import AudioSegment
 from PyPDF2 import PdfReader
 
 from modules.utils import *
@@ -33,6 +36,18 @@ def getPPTXText(filePath):
                 content += shape.text + " "
     return content
 
+
+def getAudioText(filePath):
+    v = AudioSegment.from_file(filePath)
+    track = v.set_channels(1).set_frame_rate(16000).set_sample_width(2)
+    track.export("temp.wav", format="wav")
+    filePathToUse = "temp.wav"
+    recog = speech_recognition.Recognizer()
+    with speech_recognition.AudioFile("temp.wav") as source:
+        src = recog.record(source)
+    return recog.recognize_google(src)
+
+
 def getFileText(filePath):
     f = open(filePath, "r")
     content = f.read()
@@ -41,9 +56,10 @@ def getFileText(filePath):
 
 
 fileMap = {
-    "pdf": getPDFText,
-    "docx": getDOCXText,
-    "pptx": getPPTXText,
+    getPDFText: ["pdf"],
+    getDOCXText: ["docx"],
+    getPPTXText: ["pptx"],
+    getAudioText: ["3gp", "flac", "flv", "mov", "mp3", "mp4", "ogg", "wav"],
 }
 
 
@@ -51,10 +67,12 @@ def getFileContents(filePath):
     k = filePath.split(".")
     fileExtension = k[len(k) - 1]
     content = ""
-    if fileMap[fileExtension]:
-        functionCall = fileMap[fileExtension]
-        content = functionCall(filePath)
-    else:
-        content = getFileText(filePath)
+    for entry, value in fileMap.items():
+        for ext in value:
+            if fileExtension in ext:
+                functionCall = entry
+                content = functionCall(filePath)
+                return cleanupString(content)
+    content = getFileText(filePath)
     return cleanupString(content)
 
