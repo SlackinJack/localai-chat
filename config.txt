@@ -1,3 +1,8 @@
+##################################################
+############ BEGIN MAIN CONFIGURATION ############
+##################################################
+
+
 # address of the server
 ADDRESS=http://localhost:8080/v1
 
@@ -51,4 +56,18 @@ MODELS_PATH=../models/
 
 # api key (cannot be empty)
 KEY=sx-xxx
+
+
+#################################################
+###### BEGIN STABLEDIFFUSION CONFIGURATION ######
+#################################################
+
+
+# set default sd model
+STABLE_DIFFUSION_MODEL=stablediffusion
+
+
+# set image size
+IMAGE_SIZE=256x256
+
 

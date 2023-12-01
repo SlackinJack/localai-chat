@@ -4,6 +4,8 @@ import speech_recognition
 import random
 import re
 import urllib
+import subprocess
+import sys
 
 from pptx import Presentation
 from pydub import AudioSegment
@@ -76,3 +78,12 @@ def getFileContents(filePath):
     content = getFileText(filePath)
     return cleanupString(content)
 
+
+def openLocalFile(filePath):
+    if sys.platform == "win32":
+        os.startfile(filePath)
+    else:
+        opener = "xdg-open"
+        if sys.platform == "darwin":
+            opener = "open"
+        subprocess.call([opener, filePath])

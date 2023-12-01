@@ -18,6 +18,7 @@ strDefaultModel = ""
 ############## BEGIN CONFIGURATION ##############
 #################################################
 
+
 fileConfig = open("config.txt", "r")
 fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
@@ -35,6 +36,8 @@ strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
 shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
 
+strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
+strImageSize = configuration["IMAGE_SIZE"]
 
 #################################################
 ################ BEGIN TEMPLATES ################
@@ -86,6 +89,10 @@ def searchWeb(prompt, keywords):
         return getAnswer(prompt, textResponse, sourceResponse)
 
 
+def generateImage(prompt):
+    return getImageResponse(prompt)
+
+
 availableFunctions = [
     {
         "name": "searchWeb",
@@ -104,12 +111,27 @@ availableFunctions = [
             },
             "required": ["prompt", "keywords"],
         },
-    }
+    },
+    {
+        "name": "generateImage",
+        "description": "Generate an image.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The prompt given by the user."
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
 ]
 
 
 functionMap = {
     "searchWeb": searchWeb,
+    "generateImage": generateImage,
 }
 
 
@@ -123,9 +145,28 @@ def keyword_search(promptIn):
     return searchWeb(promptIn, keywords)
 
 
+def keyword_generate(promptIn):
+    return generateImage(promptIn)
+
 keywordsMap = {
-    "search for ": keyword_search,
-    "search ": keyword_search,
+    keyword_search: [
+        "search for ",
+        "search ",
+    ],
+    keyword_generate: [
+        "generate image ",
+        "generate picture ",
+        "generate image of ",
+        "generate picture of ",
+        "generate an image of ",
+        "generate a picture of ",
+        "make image ",
+        "make picture ",
+        "make image of ",
+        "make picture of ",
+        "make an image of ",
+        "make a picture of ",
+    ],
 }
 
 
@@ -191,6 +232,13 @@ def modelCommand(mode, currentModel):
     return model
 
 
+def sdModelCommand(mode, currentModel):
+    model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
+    if len(model) == 0:
+        model = currentModel
+    printSuccess(mode + " model set to: " + model)
+    return model
+
 #################################################
 ############### BEGIN COMPLETIONS ###############
 #################################################
@@ -214,10 +262,11 @@ def chatPrompt(promptIn):
 def getResponse(promptIn):
     if not shouldUseFunctions:
         printInfo("Using keywords...")
-        for key in keywordsMap:
-            if promptIn.startswith(key):
-                functionCall = keywordsMap[key]
-                return functionCall(promptIn.replace(key, ""))
+        for key, value in keywordsMap.items():
+            for trigger in value:
+                if promptIn.startswith(trigger):
+                    functionCall = key
+                    return functionCall(promptIn.replace(trigger, ""))
         printInfo("No keywords detected, generating chat output...")
         return getChat(promptIn)
     else:
@@ -335,6 +384,21 @@ def getTopic(promptIn):
     return getChatCompletion(4, promptIn)
 
 
+def getImageResponse(promptIn):
+    printInfo("Generating image with prompt: " + promptIn)
+    completion = openai.Image.create(
+        model = strModelStableDiffusion,
+        prompt = promptIn,
+        size = strImageSize,
+    )
+    theURL = completion.data[0].url
+    split = theURL.split("/")
+    filename = split[len(split) - 1]
+    urllib.request.urlretrieve(theURL, filename)
+    openLocalFile(filename)
+    return "Your image is available at:\n\n" + completion.data[0].url
+
+
 def detectModelsNew():
     modelList = openai.Model.list()
     for model in modelList["data"]:
@@ -355,6 +419,7 @@ if len(strModelCompletion) == 0:
     strModelCompletion = listModels[0]
 printInfo("Chat model ('chatmodel' to change): " + strModelChat)
 printInfo("Comp model ('compmodel' to change): " + strModelCompletion)
+printInfo("SD model ('sdmodel' to change): " + strModelStableDiffusion)
 shouldRun = True
 while shouldRun:
     printSeparator()
@@ -368,6 +433,8 @@ while shouldRun:
         strModelCompletion = modelCommand("Completion", strModelCompletion)
     elif strPrompt == "chatmodel":
         strModelChat = modelCommand("Chat", strModelChat)
+    elif strPrompt == "sdmodel":
+        strModelStableDiffusion = sdModelCommand("Stable Diffusion", strModelStableDiffusion)
     else:
         strResponse = ""
         printInfo("Generating response...")
