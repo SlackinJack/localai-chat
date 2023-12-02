@@ -18,7 +18,6 @@ Current dependencies (may change at any point):
 
 
 Road map and targets (mostly for myself):
-- add word-streaming...eventually
 - main.py > triggers > openFile > support other OS (currently Ubuntu)
 - utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
 - search.py > getInfoFromWebsite > add timeout
