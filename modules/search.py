@@ -8,16 +8,17 @@ from readability import Document
 
 from modules.utils import *
 
+
 ##################################################
 ################## BEGIN SEARCH ##################
 ##################################################
+
 
 def getSearchResponse(keywords, maxSources):
     responseText = ""
     responseSources = ""
     printDebug("Generated serach term(s):\n" + keywords)
     sources = searchDDG(keywords, maxSources)
-    # websiteTexts = ""
     printDebug("Target links:\n" + str(sources))
     sourceMap = {}
     # index = [href, webtext]
@@ -26,6 +27,7 @@ def getSearchResponse(keywords, maxSources):
         sourceMap[key] = [sources[key], websiteText]
         if websiteText is not None:
             printDebug("[" + str(key + 1) + "] " + websiteText)
+            responseText += "[" + websiteText + "]"
     printDebug("Generating response with sources...")
     websiteTextsAvailable = len(sourceMap)
     for entry, value in sourceMap.items():
@@ -35,13 +37,13 @@ def getSearchResponse(keywords, maxSources):
             responseText += value[1]
     if websiteTextsAvailable < 1:
         printInfo("No sources compiled - the reply will be completely generated!")
-    # responseText = websiteTexts
     else:
         responseSources += "Sources considered:\n"
         for key, value in sourceMap.items():
             if value[1] is not None:
                 responseSources += "[" + str(key + 1) + "] '" + value[0] + "\n"
     return [responseText, responseSources]
+
 
 def searchDDG(keywords, maxSources):
     hrefs = dict()

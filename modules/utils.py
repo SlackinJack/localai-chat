@@ -32,8 +32,8 @@ def printInfo(string):
         print(colored(string, "yellow"))
 
 
-def printResponse(string):
-    print(colored(string, "green"))
+def printResponse(string, endIn="\n"):
+    print(colored(string, "green"), end=endIn)
 
 
 def printGeneric(string):

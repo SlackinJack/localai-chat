@@ -61,7 +61,7 @@ fileMap = {
     getPDFText: ["pdf"],
     getDOCXText: ["docx"],
     getPPTXText: ["pptx"],
-    getAudioText: ["3gp", "flac", "flv", "mov", "mp3", "mp4", "ogg", "wav"],
+    getAudioText: ["3gp", "flac", "flv", "mov", "mp3", "mp4", "ogg", "wav"], # check ffmpeg for filetypes
 }
 
 

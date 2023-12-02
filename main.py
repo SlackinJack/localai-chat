@@ -35,9 +35,11 @@ strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
 shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
+enableStreamText = (configuration["ENABLE_TEXT_STREAMING"] == "True")
 
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
+
 
 #################################################
 ################ BEGIN TEMPLATES ################
@@ -56,18 +58,6 @@ with open("templates/chat-template.tmpl", "r") as f:
         strChatTemplate += l + "\n"
 
 
-strCompletionTemplate = ""
-with open("templates/completion-template.tmpl", "r") as f:
-    for l in f.readlines():
-        strCompletionTemplate += l + "\n"
-
-
-strSummaryTemplate = ""
-with open("templates/summary-template.tmpl", "r") as f:
-    for l in f.readlines():
-        strSummaryTemplate += l + "\n"
-
-
 strTopicTemplate = ""
 with open("templates/topic-template.tmpl", "r") as f:
     for l in f.readlines():
@@ -79,17 +69,16 @@ with open("templates/topic-template.tmpl", "r") as f:
 #################################################
 
 
-#def searchWeb(prompt, keywords):
 def searchWeb(args):
     arg1 = args["prompt"]
     arg2 = args["keywords"]
     response = getSearchResponse(arg2, intMaxSources)
     textResponse = response[0]
     sourceResponse = response[1]
-    if len(response) < 1:
+    if len(textResponse) < 1 and len(sourceResponse) < 1:
         return getChat(arg1)
     else:
-        return getAnswer(arg1, textResponse, sourceResponse)
+        return getAnswer(arg1, infoIn=textResponse, sourcesIn=sourceResponse, isOutput=True)
 
 
 def generateImage(args):
@@ -194,7 +183,7 @@ def browse(promptIn):
             newPrompt = promptIn.replace(s, "")
             websiteText = getInfoFromWebsite(s, True)
             if websiteText is not None:
-                return getAnswer(newPrompt, websiteText)
+                return getAnswer(newPrompt, infoIn=websiteText, isOutput=True)
             else:
                 return ""
 
@@ -203,7 +192,7 @@ def openFile(promptIn):
     filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
     newPrompt = promptIn.replace("'" + filePath + "'", "")
     strFileContents = getFileContents(filePath)
-    return getAnswer(newPrompt, strFileContents)
+    return getAnswer(newPrompt, infoIn=strFileContents, isOutput=True)
 
 
 triggers = {
@@ -252,6 +241,7 @@ def sdModelCommand(mode, currentModel):
     printSuccess(mode + " model set to: " + model)
     return model
 
+
 #################################################
 ############### BEGIN COMPLETIONS ###############
 #################################################
@@ -289,10 +279,6 @@ def getResponse(promptIn):
             printDebug("Calling function: " + functionName)
             functionCall = functionMap[functionName]
             functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
-            #functionOutput = functionCall(
-            #    prompt = functionArgs.get("prompt"),
-            #    keywords = functionArgs.get("keywords"),
-            #)
             functionOutput = functionCall(functionArgs)
             return functionOutput
         else:
@@ -316,12 +302,14 @@ def getChatFunctionCompletion(promptIn):
     return None
 
 
-def getChatCompletion(templateMode, promptIn, infoIn=None, sources=None):
-    global strChatTemplate                 #0 - chat
-    global strCompletionTemplate           #1 - completion
-    global strAnswerTemplate               #2 - completion
-    global strSummaryTemplate              #3 - completion
-    global strTopicTemplate                #4 - completion
+def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=None, sources=None):
+    canStreamText = False
+    if shouldStreamText and enableStreamText:
+        canStreamText = True
+        printDebug("Streaming text for this completion!")
+    global strChatTemplate                 #0 - chat model
+    global strAnswerTemplate               #1 - comp model
+    global strTopicTemplate                #2 - comp model
     strTemplatedPrompt = ""
     strModelToUse = strModelCompletion
     match templateMode:
@@ -329,12 +317,8 @@ def getChatCompletion(templateMode, promptIn, infoIn=None, sources=None):
             strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
             strModelToUse = strModelChat
         case 1:
-            strTemplatedPrompt = strCompletionTemplate.replace("{{.Input}}", promptIn)
-        case 2:
             strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
-        case 3:
-            strTemplatedPrompt = strSummaryTemplate.replace("{{.Input}}", promptIn)
-        case 4:
+        case 2:
             strTemplatedPrompt = strTopicTemplate.replace("{{.Input}}", promptIn)
         case _:
             strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
@@ -353,6 +337,7 @@ def getChatCompletion(templateMode, promptIn, infoIn=None, sources=None):
     try:
         completion = openai.ChatCompletion.create(
             model = strModelToUse,
+            stream = canStreamText,
             messages = [
                 {
                     "role": "system",
@@ -368,34 +353,36 @@ def getChatCompletion(templateMode, promptIn, infoIn=None, sources=None):
                 },
             ],
         )
-        
-        if sources is not None:
-            return completion.choices[0].message.content + "\n\n\n" + sources
+        if canStreamText:
+            printSeparator()
+            for chunk in completion:
+                if chunk.choices[0].delta.content is not None:
+                    printResponse(chunk.choices[0].delta.content, "")
+                    time.sleep(0.025)
+                    sys.stdout.flush()
+            if sources is not None:
+                printResponse("\n\n\n" + sources)
+            return ""
         else:
-            return completion.choices[0].message.content
+            if sources is not None:
+                return completion.choices[0].message.content + "\n\n\n" + sources
+            else:
+                return completion.choices[0].message.content
     except:
         printError("Failed to connect to LocalAI! (Check your connection?)")
         return ""
 
 
 def getChat(promptIn):
-    return getChatCompletion(0, promptIn)
+    return getChatCompletion(0, promptIn, True)
 
 
-def getCompletion(promptIn):
-    return getChatCompletion(1, promptIn)
-
-
-def getAnswer(promptIn, infoIn, sourcesIn=None):
-    return getChatCompletion(2, promptIn, infoIn, sourcesIn)
-
-
-def getSummary(promptIn):
-    return getChatCompletion(3, promptIn)
+def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
+    return getChatCompletion(2, promptIn, isOutput, infoIn, sourcesIn)
 
 
 def getTopic(promptIn):
-    return getChatCompletion(4, promptIn)
+    return getChatCompletion(3, promptIn)
 
 
 def getImageResponse(promptIn):
@@ -435,6 +422,8 @@ if len(strModelCompletion) == 0:
 printInfo("Chat model ('chatmodel' to change): " + strModelChat)
 printInfo("Comp model ('compmodel' to change): " + strModelCompletion)
 printInfo("SD model ('sdmodel' to change): " + strModelStableDiffusion)
+
+
 shouldRun = True
 while shouldRun:
     printSeparator()
@@ -456,6 +445,7 @@ while shouldRun:
         tic = time.perf_counter()
         strResponse = chatPrompt(strPrompt)
         toc = time.perf_counter()
-        printSeparator()
-        printResponse(strResponse)
+        if len(strResponse) > 0:
+            printSeparator()
+            printResponse(strResponse)
         printDebug(f"\n\n{toc - tic:0.3f} seconds")
