@@ -1,3 +1,4 @@
+import datetime
 import json
 import openai
 import os
@@ -12,6 +13,15 @@ from modules.utils import *
 
 listModels = []
 strDefaultModel = ""
+
+
+#################################################
+############ BEGIN CONVERSATION INIT ############
+#################################################
+
+
+strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+strConvoName = strConvoTimestamp # change to use different conversation
 
 
 #################################################
@@ -62,6 +72,12 @@ strTopicTemplate = ""
 with open("templates/topic-template.tmpl", "r") as f:
     for l in f.readlines():
         strTopicTemplate += l + "\n"
+
+
+strReplyTemplate = ""
+with open("templates/reply-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strReplyTemplate += l + "\n"
 
 
 #################################################
@@ -149,6 +165,14 @@ def keyword_generate(promptIn):
         }
     )
 
+
+def keyword_reply(promptIn):
+    fileConvo = open("conversations/" + strConvoName + ".convo", "r")
+    fileConversation = (fileConvo.read()).split("\n")
+    fileConvo.close()
+    return getReply(promptIn, fileConversation)
+
+
 keywordsMap = {
     keyword_search: [
         "search for ",
@@ -167,6 +191,9 @@ keywordsMap = {
         "make picture of ",
         "make an image of ",
         "make a picture of ",
+    ],
+    keyword_reply: [
+        "reply ",
     ],
 }
 
@@ -218,7 +245,7 @@ triggerFunctionMap = {
 
 
 def helpCommand():
-    printInfo("Available commands: ")
+    printGeneric("Available commands: ")
     printGeneric("chatmodel")
     printGeneric("compmodel")
     printGeneric("sdmodel")
@@ -310,6 +337,7 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
     global strChatTemplate                 #0 - chat model
     global strAnswerTemplate               #1 - comp model
     global strTopicTemplate                #2 - comp model
+    global strReplyTemplate                #3 - chat model
     strTemplatedPrompt = ""
     strModelToUse = strModelCompletion
     match templateMode:
@@ -320,6 +348,9 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case 2:
             strTemplatedPrompt = strTopicTemplate.replace("{{.Input}}", promptIn)
+        case 3:
+            strTemplatedPrompt = strReplyTemplate.replace("{{.Input}}", promptIn)
+            strModelToUse = strModelChat
         case _:
             strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
             strModelToUse = strModelChat
@@ -333,7 +364,14 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strUser = line.replace("USER:", "")
         elif line.startswith("ASSISTANT:"):
             strAssistant = line.replace("ASSISTANT:", "")
-    printDebug("Prompt (after templating):\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
+    if templateMode == 3:
+        prevConvo = ""
+        for line in infoIn:
+            prevConvo = prevConvo + line + "\n"
+        printDebug("Prompt (after templating):\n" + prevConvo + "\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
+        strSystem = prevConvo + "\n" + strSystem
+    else:
+        printDebug("Prompt (after templating):\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
     try:
         completion = openai.ChatCompletion.create(
             model = strModelToUse,
@@ -355,11 +393,15 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
         )
         if canStreamText:
             printSeparator()
+            strOutput = ""
             for chunk in completion:
                 if chunk.choices[0].delta.content is not None:
                     printResponse(chunk.choices[0].delta.content, "")
                     time.sleep(0.025)
                     sys.stdout.flush()
+                    strOutput = strOutput + chunk.choices[0].delta.content
+            # append to convo
+            writeReplyToFile("ASSISTANT: " + strOutput)
             if sources is not None:
                 printResponse("\n\n\n" + sources)
             return ""
@@ -383,6 +425,10 @@ def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
 
 def getTopic(promptIn):
     return getChatCompletion(2, promptIn)
+
+
+def getReply(promptIn, infoIn):
+    return getChatCompletion(3, promptIn, True, infoIn)
 
 
 def getImageResponse(promptIn):
@@ -414,6 +460,12 @@ def detectModelsNew():
 ##################################################
 
 
+def writeReplyToFile(strIn):
+    fileConvo = open("conversations/" + strConvoName + ".convo", "a")
+    fileConvo.write(strIn + "\n")
+    fileConvo.close()
+
+
 detectModelsNew()
 if len(strModelChat) == 0:
     strModelChat = listModels[0]
@@ -442,6 +494,7 @@ while shouldRun:
     else:
         strResponse = ""
         printInfo("Generating response...")
+        writeReplyToFile("USER: " + strPrompt)
         tic = time.perf_counter()
         strResponse = chatPrompt(strPrompt)
         toc = time.perf_counter()
