@@ -5,6 +5,8 @@ import os
 import re
 import time
 
+from pathlib import Path
+
 # local imports
 from modules.openfile import *
 from modules.search import *
@@ -13,15 +15,6 @@ from modules.utils import *
 
 listModels = []
 strDefaultModel = ""
-
-
-#################################################
-############ BEGIN CONVERSATION INIT ############
-#################################################
-
-
-strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-strConvoName = strConvoTimestamp # change to use different conversation
 
 
 #################################################
@@ -49,6 +42,36 @@ enableStreamText = (configuration["ENABLE_TEXT_STREAMING"] == "True")
 
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
+
+
+#################################################
+############## BEGIN CONVERSATIONS ##############
+#################################################
+
+
+strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+strConvoName = strConvoTimestamp
+
+
+def setConversation(filename):
+    global strConvoName
+    testpath = Path("conversations/" + filename + ".convo")
+    if testpath.is_file() is not True:
+        open("conversations/" + filename + ".convo", "w").close()
+    strConvoName = filename
+
+
+def writeConversation(strIn):
+    fileConvo = open("conversations/" + strConvoName + ".convo", "a")
+    fileConvo.write(strIn + "\n")
+    fileConvo.close()
+
+
+def getConversation():
+    fileConvo = open("conversations/" + strConvoName + ".convo", "r")
+    fileConversation = (fileConvo.read()).split("\n")
+    fileConvo.close()
+    return fileConversation
 
 
 #################################################
@@ -167,10 +190,7 @@ def keyword_generate(promptIn):
 
 
 def keyword_reply(promptIn):
-    fileConvo = open("conversations/" + strConvoName + ".convo", "r")
-    fileConversation = (fileConvo.read()).split("\n")
-    fileConvo.close()
-    return getReply(promptIn, fileConversation)
+    return getReply(promptIn, getConversation())
 
 
 keywordsMap = {
@@ -246,10 +266,25 @@ triggerFunctionMap = {
 
 def helpCommand():
     printGeneric("Available commands: ")
+    printGeneric("convo(s)/conversations")
     printGeneric("chatmodel")
     printGeneric("compmodel")
     printGeneric("sdmodel")
     printGeneric("exit/quit")
+
+
+def convoCommand():
+    convoList = []
+    for conversation in os.listdir("conversations"):
+        if conversation.endswith(".convo"):
+            convoList.append(conversation.replace(".convo", ""))
+    printInfo("Conversations available: ")
+    for convo in convoList:
+        printInfo(convo)
+    convoName = printInput("Select a conversation to use, or create a new one by using an unique name: ")
+    setConversation(convoName)
+    printSuccess("Conversation set to: " + convoName)
+    return
 
 
 def modelCommand(mode, currentModel):
@@ -401,7 +436,7 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
                     sys.stdout.flush()
                     strOutput = strOutput + chunk.choices[0].delta.content
             # append to convo
-            writeReplyToFile("ASSISTANT: " + strOutput)
+            writeConversation("ASSISTANT: " + strOutput)
             if sources is not None:
                 printResponse("\n\n\n" + sources)
             return ""
@@ -460,12 +495,6 @@ def detectModelsNew():
 ##################################################
 
 
-def writeReplyToFile(strIn):
-    fileConvo = open("conversations/" + strConvoName + ".convo", "a")
-    fileConvo.write(strIn + "\n")
-    fileConvo.close()
-
-
 detectModelsNew()
 if len(strModelChat) == 0:
     strModelChat = listModels[0]
@@ -485,6 +514,8 @@ while shouldRun:
         helpCommand()
     elif strPrompt == "exit" or strPrompt == "quit":
         shouldRun = False
+    elif strPrompt == "convo" or strPrompt == "convos" or strPrompt == "conversations":
+        convoCommand()
     elif strPrompt == "compmodel":
         strModelCompletion = modelCommand("Completion", strModelCompletion)
     elif strPrompt == "chatmodel":
@@ -494,7 +525,7 @@ while shouldRun:
     else:
         strResponse = ""
         printInfo("Generating response...")
-        writeReplyToFile("USER: " + strPrompt)
+        writeConversation("USER: " + strPrompt)
         tic = time.perf_counter()
         strResponse = chatPrompt(strPrompt)
         toc = time.perf_counter()

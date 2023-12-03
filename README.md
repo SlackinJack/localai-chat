@@ -12,7 +12,7 @@ Very barebones & basic front-end for LocalAI written in Python3
 - Generate responses only when appropriate (at least thats the goal anyway)
 - Autodetect, and change models on-the-fly
 - Text-streaming
-- Reply to conversations
+- Reply to conversations, load previous conversations or make new ones
 
 
 ## Current dependencies (may change at any point):
@@ -23,7 +23,6 @@ Very barebones & basic front-end for LocalAI written in Python3
 - main.py > triggers > openFile > support other OS (currently Ubuntu)
 - utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
 - search.py > getInfoFromWebsite > add timeout
-- load/new conversations
 
 
 ## Test environment:
