@@ -104,27 +104,24 @@ with open("templates/reply-template.tmpl", "r") as f:
 #################################################
 
 
-def searchWeb(args):
+def function_search(args):
     arg1 = args["prompt"]
     arg2 = args["keywords"]
     response = getSearchResponse(arg2, intMaxSources)
     textResponse = response[0]
     sourceResponse = response[1]
-    if len(textResponse) < 1 and len(sourceResponse) < 1:
-        return getReply(arg1)
-    else:
-        writeConversation("SYSTEM: " + textResponse)
-        return getAnswer(arg1, infoIn=textResponse, sourcesIn=sourceResponse, isOutput=True)
+    writeConversation("SYSTEM: " + textResponse)
+    return getAnswer(arg1, infoIn=textResponse, sourcesIn=sourceResponse, isOutput=True)
 
 
-def generateImage(args):
+def function_generate_image(args):
     arg1 = args["prompt"]
     return getImageResponse(arg1)
 
 
 availableFunctions = [
     {
-        "name": "searchWeb",
+        "name": "function_search",
         "description": "Search exclusively for these topics: news, people, locations, products and services.",
         "parameters": {
             "type": "object",
@@ -142,7 +139,7 @@ availableFunctions = [
         },
     },
     {
-        "name": "generateImage",
+        "name": "function_generate_image",
         "description": "Generate an image.",
         "parameters": {
             "type": "object",
@@ -159,8 +156,8 @@ availableFunctions = [
 
 
 functionMap = {
-    "searchWeb": searchWeb,
-    "generateImage": generateImage,
+    "function_search": function_search,
+    "function_generate_image": function_generate_image,
 }
 
 
@@ -220,20 +217,17 @@ keywordsMap = {
 ##################################################
 
 
-def browse(promptIn):
+def trigger_browse(promptIn):
     strings = promptIn.split(" ")
     for s in strings:
         if s.startswith("http"):
             newPrompt = promptIn.replace(s, "")
             websiteText = getInfoFromWebsite(s, True)
-            if websiteText is not None:
-                writeConversation("SYSTEM: " + websiteText)
-                return getAnswer(newPrompt, infoIn=websiteText, isOutput=True)
-            else:
-                return ""
+            writeConversation("SYSTEM: " + websiteText)
+            return getAnswer(newPrompt, infoIn=websiteText, isOutput=True)
 
 
-def openFile(promptIn):
+def trigger_openFile(promptIn):
     filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
     newPrompt = promptIn.replace("'" + filePath + "'", "")
     strFileContents = getFileContents(filePath)
@@ -242,19 +236,19 @@ def openFile(promptIn):
 
 
 triggers = {
-    "browse": [
+    "trigger_browse": [
     "http://",
     "https://"
     ],
-    "openFile": [
+    "trigger_openFile": [
     "'/"
     ]
 }
 
 
 triggerFunctionMap = {
-    "browse": browse,
-    "openFile": openFile,
+    "trigger_browse": trigger_browse,
+    "trigger_openFile": trigger_openFile,
 }
 
 
@@ -263,7 +257,7 @@ triggerFunctionMap = {
 ##################################################
 
 
-def helpCommand():
+def command_help():
     printGeneric("Available commands: ")
     printGeneric("convo(s)/conversations")
     printGeneric("chatmodel")
@@ -272,7 +266,7 @@ def helpCommand():
     printGeneric("exit/quit")
 
 
-def convoCommand():
+def command_convo():
     convoList = []
     for conversation in os.listdir("conversations"):
         if conversation.endswith(".convo"):
@@ -286,7 +280,7 @@ def convoCommand():
     return
 
 
-def modelCommand(mode, currentModel):
+def command_chat_model(mode, currentModel):
     printInfo("Available models: " + str(listModels))
     model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
     if len(model) == 0:
@@ -295,7 +289,7 @@ def modelCommand(mode, currentModel):
     return model
 
 
-def sdModelCommand(mode, currentModel):
+def command_sd_model(mode, currentModel):
     model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
     if len(model) == 0:
         model = currentModel
@@ -309,54 +303,61 @@ def sdModelCommand(mode, currentModel):
 
 
 def chatPrompt(promptIn):
-    response = ""
     triggerAction = "none"
     for key in triggers:
         for value in triggers[key]:
             if value in promptIn:
                 triggerAction = key
     if triggerAction == "none":
-        response = getResponse(promptIn)
-    else:
-        functionCall = triggerFunctionMap[action]
-        response = functionCall(promptIn)
-    return response
-
-
-def getResponse(promptIn):
-    if not shouldUseFunctions:
-        printInfo("Using keywords...")
-        for key, value in keywordsMap.items():
-            for trigger in value:
-                if promptIn.startswith(trigger):
-                    functionCall = key
-                    return functionCall(promptIn.replace(trigger, ""))
-        printInfo("No keywords detected, generating chat output...")
-        return getReply(promptIn)
-    else:
-        completion = getChatFunctionCompletion(promptIn)
-        if completion is not None:
-            functionName = completion.choices[0].message.function_call.name
-            printDebug("Calling function: " + functionName)
-            functionCall = functionMap[functionName]
-            functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
-            functionOutput = functionCall(functionArgs)
-            return functionOutput
+        if shouldUseFunctions:
+            return getFunctionResponse(promptIn)
         else:
-            printDebug("No functions for prompt - the response will be completely generated!")
-            return getReply(promptIn)
+            return getKeywordResponse(promptIn)
+    else:
+        triggerCall = triggerFunctionMap[action]
+        return triggerCall(promptIn)
 
 
-def getChatFunctionCompletion(promptIn):
+def getKeywordResponse(promptIn):
+    printInfo("Using keywords...")
+    for key, value in keywordsMap.items():
+        for trigger in value:
+            if promptIn.startswith(trigger):
+                return key(promptIn.replace(trigger, ""))
+    printInfo("No keywords detected, generating chat output...")
+    return getReply(promptIn)
+
+
+def getFunctionResponse(promptIn):
+    printInfo("Using functions...")
+    completion = getFunctionCompletion(promptIn)
+    if completion is not None:
+        functionName = completion.choices[0].message.function_call.name
+        printDebug("Calling function: " + functionName)
+        functionCall = functionMap[functionName]
+        functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
+        functionOutput = functionCall(functionArgs)
+        return functionOutput
+    else:
+        printDebug("No functions for prompt - the response will be completely generated!")
+        return getReply(promptIn)
+
+
+def getFunctionCompletion(promptIn):
     completion = openai.ChatCompletion.create(
         model = strModelCompletion,
-        messages = [{"role": "system", "content": promptIn}],
+        messages = [
+            {
+                "role": "system",
+                "content": promptIn
+            },
+        ],
         functions = availableFunctions,
         function_call = "auto",
     )
     try:
-        if (completion.choices[0].message.function_call):
-            if(completion.choices[0].message.function_call.name):
+        if completion.choices[0].message.function_call:
+            if completion.choices[0].message.function_call.name:
                 return completion
     except:
         return None
@@ -368,9 +369,9 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
     if shouldStreamText and enableStreamText:
         canStreamText = True
         printDebug("Streaming text for this completion!")
+    global strReplyTemplate                #0 - chat model
     global strAnswerTemplate               #1 - comp model
     global strTopicTemplate                #2 - comp model
-    global strReplyTemplate                #3 - chat model
     strTemplatedPrompt = ""
     strModelToUse = strModelCompletion
     match templateMode:
@@ -378,11 +379,8 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case 2:
             strTemplatedPrompt = strTopicTemplate.replace("{{.Input}}", promptIn)
-        case 3:
-            strTemplatedPrompt = strReplyTemplate.replace("{{.Input}}", promptIn)
-            strModelToUse = strModelChat
         case _:
-            strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
+            strTemplatedPrompt = strReplyTemplate.replace("{{.Input}}", promptIn)
             strModelToUse = strModelChat
     strSystem = ""
     strUser = ""
@@ -396,52 +394,49 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strAssistant = line.replace("ASSISTANT:", "")
     if templateMode == 3:
         prevConvo = ""
-        for line in infoIn:
-            prevConvo = prevConvo + line + "\n"
-        printDebug("Prompt (after templating):\n" + prevConvo + "\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
-        strSystem = prevConvo + "\n" + strSystem
+        for i in infoIn:
+            prevConvo = prevConvo + "\n" + i
+        strSystem = prevConvo + "\nSYSTEM: " + strSystem
+        printDebug("Prompt (after templating):\n" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
     else:
         printDebug("Prompt (after templating):\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
-    try:
-        completion = openai.ChatCompletion.create(
-            model = strModelToUse,
-            stream = canStreamText,
-            messages = [
-                {
-                    "role": "system",
-                    "content": strSystem,
-                },
-                {
-                    "role": "user",
-                    "content": strUser,
-                },
-                {
-                    "role": "assistant",
-                    "content": strAssistant,
-                },
-            ],
-        )
-        if canStreamText:
-            printSeparator()
-            strOutput = ""
-            for chunk in completion:
-                if chunk.choices[0].delta.content is not None:
-                    printResponse(chunk.choices[0].delta.content, "")
-                    time.sleep(0.025)
-                    sys.stdout.flush()
-                    strOutput = strOutput + chunk.choices[0].delta.content
-            writeConversation("ASSISTANT: " + strOutput)
-            if sources is not None:
-                printResponse("\n\n\n" + sources)
-            return ""
-        else:
-            if sources is not None:
-                return completion.choices[0].message.content + "\n\n\n" + sources
-            else:
-                return completion.choices[0].message.content
-    except:
-        printError("Failed to connect to LocalAI! (Check your connection?)")
-        return ""
+    completion = openai.ChatCompletion.create(
+        model = strModelToUse,
+        stream = canStreamText,
+        messages = [
+            {
+                "role": "system",
+                "content": strSystem,
+            },
+            {
+                "role": "user",
+                "content": strUser,
+            },
+            {
+                "role": "assistant",
+                "content": strAssistant,
+            },
+        ],
+    )
+    if canStreamText:
+        printSeparator()
+        strOutput = ""
+        for chunk in completion:
+            if chunk.choices[0].delta.content is not None:
+                printResponse(chunk.choices[0].delta.content, "")
+                time.sleep(0.025)
+                sys.stdout.flush()
+                strOutput = strOutput + chunk.choices[0].delta.content
+        writeConversation("USER: " + strUser + "\n" + "ASSISTANT: " + strOutput)
+        if sources is not None:
+            printResponse("\n\n\n" + sources)
+        return [False, strOutput]
+    else:
+        strOutput = completion.choices[0].message.content
+        writeConversation("USER: " + strUser + "\n" + "ASSISTANT: " + strOutput)
+        if sources is not None:
+            strOutput = strOutput + "\n\n\n" + sources
+        return [True, strOutput]
 
 
 def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
@@ -502,25 +497,24 @@ while shouldRun:
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()
     if len(strPrompt) == 0 or strPrompt.isspace() or strPrompt == "help":
-        helpCommand()
+        command_help()
     elif strPrompt == "exit" or strPrompt == "quit":
         shouldRun = False
     elif strPrompt == "convo" or strPrompt == "convos" or strPrompt == "conversations":
-        convoCommand()
+        command_convo()
     elif strPrompt == "compmodel":
-        strModelCompletion = modelCommand("Completion", strModelCompletion)
+        strModelCompletion = command_chat_model("Completion", strModelCompletion)
     elif strPrompt == "chatmodel":
-        strModelChat = modelCommand("Chat", strModelChat)
+        strModelChat = command_chat_model("Chat", strModelChat)
     elif strPrompt == "sdmodel":
-        strModelStableDiffusion = sdModelCommand("Stable Diffusion", strModelStableDiffusion)
+        strModelStableDiffusion = command_sd_model("Stable Diffusion", strModelStableDiffusion)
     else:
-        strResponse = ""
+        response = [False, None]
         printInfo("Generating response...")
-        writeConversation("USER: " + strPrompt)
         tic = time.perf_counter()
-        strResponse = chatPrompt(strPrompt)
+        response = chatPrompt(strPrompt)
         toc = time.perf_counter()
-        if len(strResponse) > 0:
+        if response[0] and response[1] is not None:
             printSeparator()
-            printResponse(strResponse)
+            printResponse(response[1])
         printDebug(f"\n\n{toc - tic:0.3f} seconds")

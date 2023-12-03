@@ -77,7 +77,7 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
         websiteText = cleanupString(websiteText)
     except:
         printError("Failed to load the website!")
-        return None
+        return ""
     strJS = ["JavaScript", "JS", "browser", "enable"]
     matchJS = 0
     for s in strJS:
@@ -85,12 +85,12 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
             matchJS += 1
     if matchJS >= 3:
         printError("Website failed JS test!")
-        return None
+        return ""
     errors = ["Access Denied", "You don't have permission to access", "403 - Forbidden", "Access to this page is forbidden", "Why have I been blocked?", "This website is using a security service to protect itself from online attacks."]
     for e in errors:
         if e in websiteText:
             printError("Website failed error test!")
-            return None
+            return ""
     if not bypassLength:
         websiteText = splitBySentenceLength(websiteText, maxSentences)[0]
     return websiteText
