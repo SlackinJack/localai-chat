@@ -7,7 +7,6 @@ import time
 
 from pathlib import Path
 
-# local imports
 from modules.openfile import *
 from modules.search import *
 from modules.utils import *
@@ -74,6 +73,9 @@ def getConversation():
     return fileConversation
 
 
+setConversation(strConvoTimestamp)
+
+
 #################################################
 ################ BEGIN TEMPLATES ################
 #################################################
@@ -83,12 +85,6 @@ strAnswerTemplate = ""
 with open("templates/answer-template.tmpl", "r") as f:
     for l in f.readlines():
         strAnswerTemplate += l + "\n"
-
-
-strChatTemplate = ""
-with open("templates/chat-template.tmpl", "r") as f:
-    for l in f.readlines():
-        strChatTemplate += l + "\n"
 
 
 strTopicTemplate = ""
@@ -115,8 +111,9 @@ def searchWeb(args):
     textResponse = response[0]
     sourceResponse = response[1]
     if len(textResponse) < 1 and len(sourceResponse) < 1:
-        return getChat(arg1)
+        return getReply(arg1)
     else:
+        writeConversation("SYSTEM: " + textResponse)
         return getAnswer(arg1, infoIn=textResponse, sourcesIn=sourceResponse, isOutput=True)
 
 
@@ -190,7 +187,7 @@ def keyword_generate(promptIn):
 
 
 def keyword_reply(promptIn):
-    return getReply(promptIn, getConversation())
+    return getReply(promptIn)
 
 
 keywordsMap = {
@@ -230,6 +227,7 @@ def browse(promptIn):
             newPrompt = promptIn.replace(s, "")
             websiteText = getInfoFromWebsite(s, True)
             if websiteText is not None:
+                writeConversation("SYSTEM: " + websiteText)
                 return getAnswer(newPrompt, infoIn=websiteText, isOutput=True)
             else:
                 return ""
@@ -239,6 +237,7 @@ def openFile(promptIn):
     filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
     newPrompt = promptIn.replace("'" + filePath + "'", "")
     strFileContents = getFileContents(filePath)
+    writeConversation("SYSTEM: " + strFileContents)
     return getAnswer(newPrompt, infoIn=strFileContents, isOutput=True)
 
 
@@ -311,12 +310,12 @@ def sdModelCommand(mode, currentModel):
 
 def chatPrompt(promptIn):
     response = ""
-    action = "none"
+    triggerAction = "none"
     for key in triggers:
         for value in triggers[key]:
             if value in promptIn:
-                action = key
-    if action == "none":
+                triggerAction = key
+    if triggerAction == "none":
         response = getResponse(promptIn)
     else:
         functionCall = triggerFunctionMap[action]
@@ -333,7 +332,7 @@ def getResponse(promptIn):
                     functionCall = key
                     return functionCall(promptIn.replace(trigger, ""))
         printInfo("No keywords detected, generating chat output...")
-        return getChat(promptIn)
+        return getReply(promptIn)
     else:
         completion = getChatFunctionCompletion(promptIn)
         if completion is not None:
@@ -345,7 +344,7 @@ def getResponse(promptIn):
             return functionOutput
         else:
             printDebug("No functions for prompt - the response will be completely generated!")
-            return getChat(promptIn)
+            return getReply(promptIn)
 
 
 def getChatFunctionCompletion(promptIn):
@@ -369,16 +368,12 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
     if shouldStreamText and enableStreamText:
         canStreamText = True
         printDebug("Streaming text for this completion!")
-    global strChatTemplate                 #0 - chat model
     global strAnswerTemplate               #1 - comp model
     global strTopicTemplate                #2 - comp model
     global strReplyTemplate                #3 - chat model
     strTemplatedPrompt = ""
     strModelToUse = strModelCompletion
     match templateMode:
-        case 0:
-            strTemplatedPrompt = strChatTemplate.replace("{{.Input}}", promptIn)
-            strModelToUse = strModelChat
         case 1:
             strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case 2:
@@ -435,7 +430,6 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
                     time.sleep(0.025)
                     sys.stdout.flush()
                     strOutput = strOutput + chunk.choices[0].delta.content
-            # append to convo
             writeConversation("ASSISTANT: " + strOutput)
             if sources is not None:
                 printResponse("\n\n\n" + sources)
@@ -450,10 +444,6 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
         return ""
 
 
-def getChat(promptIn):
-    return getChatCompletion(0, promptIn, True)
-
-
 def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
     return getChatCompletion(1, promptIn, isOutput, infoIn, sourcesIn)
 
@@ -462,8 +452,8 @@ def getTopic(promptIn):
     return getChatCompletion(2, promptIn)
 
 
-def getReply(promptIn, infoIn):
-    return getChatCompletion(3, promptIn, True, infoIn)
+def getReply(promptIn):
+    return getChatCompletion(3, promptIn, True, getConversation())
 
 
 def getImageResponse(promptIn):
@@ -507,6 +497,7 @@ printInfo("SD model ('sdmodel' to change): " + strModelStableDiffusion)
 
 shouldRun = True
 while shouldRun:
+    printDebug("Current conversation file: " + strConvoName + ".convo")
     printSeparator()
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()

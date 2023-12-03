@@ -87,3 +87,10 @@ def splitBySentenceLength(textIn, maxLength):
                 k = 0
     return output
 
+
+def checkEmptyString(strIn):
+    blanks = [" ", "\t", "\n", "\v", "\r", "\f"]
+    for s in strIn:
+        if s not in blanks:
+            return False
+    return True
