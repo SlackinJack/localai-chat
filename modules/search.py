@@ -15,9 +15,9 @@ from modules.utils import *
 
 
 def getSearchResponse(keywords, maxSources):
+    printDebug("Search term(s):\n" + keywords)
     responseText = ""
     responseSources = ""
-    printDebug("Generated serach term(s):\n" + keywords)
     sources = searchDDG(keywords, maxSources)
     printDebug("Target links:\n" + str(sources))
     sourceMap = {}
@@ -70,14 +70,16 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
     printDebug("Getting text from: " + websiteIn)
     websiteText = ""
     try:
-        website = requests.get(websiteIn)
-        reader = Document(website.content)
-        websiteText = reader.summary()
-        websiteText = re.sub('<[^<]+?>', '', websiteText)
-        websiteText = cleanupString(websiteText)
+        website = requests.get(websiteIn, timeout=15)
+        if website.status_code != 200:
+            raise Exception("Status code is not 200.")
     except:
         printError("Failed to load the website!")
         return ""
+    reader = Document(website.content)
+    websiteText = reader.summary()
+    websiteText = re.sub('<[^<]+?>', '', websiteText)
+    websiteText = cleanupString(websiteText)
     strJS = ["JavaScript", "JS", "browser", "enable"]
     matchJS = 0
     for s in strJS:

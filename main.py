@@ -167,7 +167,7 @@ functionMap = {
 
 
 def keyword_search(promptIn):
-    return searchWeb(
+    return function_search(
         {
             "prompt": promptIn,
             "keywords": getTopic(promptIn),
@@ -176,15 +176,11 @@ def keyword_search(promptIn):
 
 
 def keyword_generate(promptIn):
-    return generateImage(
+    return function_generate_image(
         {
             "prompt": promptIn,
         }
     )
-
-
-def keyword_reply(promptIn):
-    return getReply(promptIn)
 
 
 keywordsMap = {
@@ -205,9 +201,6 @@ keywordsMap = {
         "make picture of ",
         "make an image of ",
         "make a picture of ",
-    ],
-    keyword_reply: [
-        "reply ",
     ],
 }
 
@@ -235,22 +228,15 @@ def trigger_openFile(promptIn):
     return getAnswer(newPrompt, infoIn=strFileContents, isOutput=True)
 
 
-triggers = {
-    "trigger_browse": [
+triggerMap = {
+    trigger_browse: [
     "http://",
     "https://"
     ],
-    "trigger_openFile": [
+    trigger_openFile: [
     "'/"
     ]
 }
-
-
-triggerFunctionMap = {
-    "trigger_browse": trigger_browse,
-    "trigger_openFile": trigger_openFile,
-}
-
 
 ##################################################
 ################# BEGIN COMMANDS #################
@@ -280,21 +266,59 @@ def command_convo():
     return
 
 
-def command_chat_model(mode, currentModel):
+def command_chat_model():
+    global strModelChat
     printInfo("Available models: " + str(listModels))
-    model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
+    model = printInput("Select model for chat (leave empty for current '" + strModelChat + "'): ")
     if len(model) == 0:
-        model = currentModel
-    printSuccess(mode + " model set to: " + model)
-    return model
+        model = strModelChat
+    strModelChat = model
+    printSuccess("Chat model set to: " + model)
+    return
 
 
-def command_sd_model(mode, currentModel):
-    model = printInput("Select model for " + mode + " (leave empty for current '" + currentModel + "'): ")
+def command_comp_model():
+    global strModelCompletion
+    printInfo("Available models: " + str(listModels))
+    model = printInput("Select model for chat (leave empty for current '" + strModelCompletion + "'): ")
     if len(model) == 0:
-        model = currentModel
-    printSuccess(mode + " model set to: " + model)
-    return model
+        model = strModelCompletion
+    strModelCompletion = model
+    printSuccess("Completion model set to: " + model)
+    return
+
+
+def command_sd_model():
+    global strModelStableDiffusion
+    model = printInput("Select model for Stable Diffusion (leave empty for current '" + strModelStableDiffusion + "'): ")
+    if len(model) == 0:
+        model = strModelStableDiffusion
+    strModelStableDiffusion = model
+    printSuccess("Stable Diffusion model set to: " + model)
+    return
+
+
+commandMap = {
+    command_help: [
+        "",
+        "help",
+        "?",
+    ],
+    command_convo: [
+        "convo",
+        "convos",
+        "conversations",
+    ],
+    command_chat_model: [
+        "chatmodel",
+    ],
+    command_comp_model: [
+        "compmodel",
+    ],
+    command_sd_model: [
+        "sdmodel",
+    ],
+}
 
 
 #################################################
@@ -304,9 +328,9 @@ def command_sd_model(mode, currentModel):
 
 def chatPrompt(promptIn):
     triggerAction = "none"
-    for key in triggers:
-        for value in triggers[key]:
-            if value in promptIn:
+    for key, value in triggerMap.items():
+        for v in value:
+            if v in promptIn:
                 triggerAction = key
     if triggerAction == "none":
         if shouldUseFunctions:
@@ -392,7 +416,7 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strUser = line.replace("USER:", "")
         elif line.startswith("ASSISTANT:"):
             strAssistant = line.replace("ASSISTANT:", "")
-    if templateMode == 3:
+    if templateMode != 1 and templateMode != 2:
         prevConvo = ""
         for i in infoIn:
             prevConvo = prevConvo + "\n" + i
@@ -439,16 +463,16 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
         return [True, strOutput]
 
 
+def getReply(promptIn):
+    return getChatCompletion(0, promptIn, True, getConversation())
+
+
 def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
     return getChatCompletion(1, promptIn, isOutput, infoIn, sourcesIn)
 
 
 def getTopic(promptIn):
-    return getChatCompletion(2, promptIn)
-
-
-def getReply(promptIn):
-    return getChatCompletion(3, promptIn, True, getConversation())
+    return getChatCompletion(2, promptIn)[1]
 
 
 def getImageResponse(promptIn):
@@ -480,6 +504,15 @@ def detectModelsNew():
 ##################################################
 
 
+def processCommand(promptIn):
+    for key, value in commandMap.items():
+        for v in value:
+            if strPrompt == v:
+                key()
+                return True
+    return False
+
+
 detectModelsNew()
 if len(strModelChat) == 0:
     strModelChat = listModels[0]
@@ -496,19 +529,9 @@ while shouldRun:
     printSeparator()
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()
-    if len(strPrompt) == 0 or strPrompt.isspace() or strPrompt == "help":
-        command_help()
-    elif strPrompt == "exit" or strPrompt == "quit":
+    if strPrompt == "exit" or strPrompt == "quit":
         shouldRun = False
-    elif strPrompt == "convo" or strPrompt == "convos" or strPrompt == "conversations":
-        command_convo()
-    elif strPrompt == "compmodel":
-        strModelCompletion = command_chat_model("Completion", strModelCompletion)
-    elif strPrompt == "chatmodel":
-        strModelChat = command_chat_model("Chat", strModelChat)
-    elif strPrompt == "sdmodel":
-        strModelStableDiffusion = command_sd_model("Stable Diffusion", strModelStableDiffusion)
-    else:
+    elif not processCommand(strPrompt):
         response = [False, None]
         printInfo("Generating response...")
         tic = time.perf_counter()
