@@ -35,7 +35,7 @@ intMaxSentences = int(configuration["MAX_SENTENCES"])
 strModelChat = configuration["CHAT_MODEL"]
 strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
-shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
+# shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 enableStreamText = (configuration["ENABLE_TEXT_STREAMING"] == "True")
 
@@ -122,7 +122,7 @@ def function_generate_image(args):
 availableFunctions = [
     {
         "name": "function_search",
-        "description": "Search exclusively for these topics: news, people, locations, products and services.",
+        "description": "Search for updated information.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -138,26 +138,26 @@ availableFunctions = [
             "required": ["prompt", "keywords"],
         },
     },
-    {
-        "name": "function_generate_image",
-        "description": "Generate an image.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "The prompt given by the user."
-                },
-            },
-            "required": ["prompt"],
-        },
-    },
+    #{
+    #    "name": "function_generate_image",
+    #    "description": "Generate an image.",
+    #    "parameters": {
+    #        "type": "object",
+    #        "properties": {
+    #            "prompt": {
+    #                "type": "string",
+    #                "description": "The prompt given by the user."
+    #            },
+    #        },
+    #        "required": ["prompt"],
+    #    },
+    #},
 ]
 
 
 functionMap = {
     "function_search": function_search,
-    "function_generate_image": function_generate_image,
+    #"function_generate_image": function_generate_image,
 }
 
 
@@ -331,15 +331,11 @@ def chatPrompt(promptIn):
     for key, value in triggerMap.items():
         for v in value:
             if v in promptIn:
-                triggerAction = key
-    if triggerAction == "none":
-        if shouldUseFunctions:
-            return getFunctionResponse(promptIn)
-        else:
-            return getKeywordResponse(promptIn)
-    else:
-        triggerCall = triggerFunctionMap[action]
-        return triggerCall(promptIn)
+                return key(promptIn)
+    # if shouldUseFunctions:
+    return getKeywordResponse(promptIn)
+    # else:
+    # return getFunctionResponse(promptIn)
 
 
 def getKeywordResponse(promptIn):
@@ -352,40 +348,21 @@ def getKeywordResponse(promptIn):
     return getReply(promptIn)
 
 
-def getFunctionResponse(promptIn):
-    printInfo("Using functions...")
-    completion = getFunctionCompletion(promptIn)
-    if completion is not None:
-        functionName = completion.choices[0].message.function_call.name
-        printDebug("Calling function: " + functionName)
-        functionCall = functionMap[functionName]
-        functionArgs = json.loads(completion.choices[0].message.function_call.arguments)
-        functionOutput = functionCall(functionArgs)
-        return functionOutput
-    else:
-        printDebug("No functions for prompt - the response will be completely generated!")
-        return getReply(promptIn)
-
-
-def getFunctionCompletion(promptIn):
-    completion = openai.ChatCompletion.create(
-        model = strModelCompletion,
-        messages = [
-            {
-                "role": "system",
-                "content": promptIn
-            },
-        ],
-        functions = availableFunctions,
-        function_call = "auto",
-    )
-    try:
-        if completion.choices[0].message.function_call:
-            if completion.choices[0].message.function_call.name:
-                return completion
-    except:
-        return None
-    return None
+#def getFunctionResponse(promptIn):
+#    writeConversation("USER: " + promptIn)
+#    printInfo("Using functions...")
+#    response = getFunctionCompletion(promptIn)
+#    if response[0]:
+#        functionName = response[1].name
+#        printDebug("Calling function: " + functionName)
+#        functionCall = functionMap[functionName]
+#        functionArgs = json.loads(response[1].arguments)
+#        functionOutput = functionCall(functionArgs)
+#        return functionOutput
+#    else:
+#        printDebug("No functions for prompt - the response will be completely generated!")
+#        writeConversation("ASSISTANT: " + response[1])
+#        return response[1]
 
 
 def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=None, sources=None):
@@ -473,6 +450,25 @@ def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
 
 def getTopic(promptIn):
     return getChatCompletion(2, promptIn)[1]
+
+
+#def getFunctionCompletion(promptIn):
+#    completion = openai.ChatCompletion.create(
+#        model = strModelCompletion,
+#        messages = [
+#            {
+#                "role": "user",
+#                "content": promptIn
+#            },
+#        ],
+#        functions = availableFunctions,
+#        function_call = "auto",
+#    )
+#    response = completion.choices[0].message
+#    if "function_call" in response:
+#        return [True, response.function_call]
+#    else:
+#        return [False, response.content]
 
 
 def getImageResponse(promptIn):
