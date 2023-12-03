@@ -378,11 +378,11 @@ def getChat(promptIn):
 
 
 def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
-    return getChatCompletion(2, promptIn, isOutput, infoIn, sourcesIn)
+    return getChatCompletion(1, promptIn, isOutput, infoIn, sourcesIn)
 
 
 def getTopic(promptIn):
-    return getChatCompletion(3, promptIn)
+    return getChatCompletion(2, promptIn)
 
 
 def getImageResponse(promptIn):
