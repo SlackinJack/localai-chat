@@ -1,4 +1,5 @@
 import os
+import re
 
 from termcolor import colored
 
@@ -65,27 +66,25 @@ def cleanupString(stringIn):
     return out
 
 
-def splitBySentenceLength(textIn, maxLength):
-    text = textIn
-    output = []
+def getFilePathFromPrompt(stringIn):
+    return (re.findall(r"'(.*?)'", stringIn, re.DOTALL))[0]
+
+
+def trimTextBySentenceLength(textIn, maxLength):
     i = 0 # char position
     j = 0 # sentences
     k = 0 # chars since last sentence
-    while len(text) > 0:
-        for char in text:
-            i += 1
-            k += 1
-            if "." == char or "!" == char or "?" == char:
-                j += 1
-                if k < 32:
-                    j -= 1
-                if j == maxLength:
-                    outputText = text[0:i]
-                    output.append(outputText)
-                    text = text.replace(outputText, "")
-                    i = j = 0
-                k = 0
-    return output
+    for char in textIn:
+        i += 1
+        k += 1
+        if "." == char or "!" == char or "?" == char:
+            j += 1
+            if k < 32:
+                j -= 1
+            if j == maxLength:
+                return textIn[0:i]
+            k = 0
+    return textIn
 
 
 def checkEmptyString(strIn):

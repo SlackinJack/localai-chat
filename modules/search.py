@@ -26,7 +26,7 @@ def getSearchResponse(keywords, maxSources):
         websiteText = getInfoFromWebsite(sources[key], False, maxSources)
         sourceMap[key] = [sources[key], websiteText]
         if websiteText is not None:
-            printDebug("[" + str(key + 1) + "] " + websiteText)
+            printDebug("[" + str(key) + "] " + websiteText)
             responseText += "[" + websiteText + "]"
     printDebug("Generating response with sources...")
     websiteTextsAvailable = len(sourceMap)
@@ -66,6 +66,21 @@ def searchDDG(keywords, maxSources):
     return hrefs
 
 
+jsErrors = [
+        "JavaScript",
+        "JS",
+        "browser",
+        "enable",
+]
+
+blockedErrors = [
+        "Access Denied",
+        "You don't have permission to access",
+        "403 - Forbidden", "Access to this page is forbidden",
+        "Why have I been blocked?",
+        "This website is using a security service to protect itself from online attacks.",
+]
+
 def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
     printDebug("Getting text from: " + websiteIn)
     websiteText = ""
@@ -80,19 +95,18 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
     websiteText = reader.summary()
     websiteText = re.sub('<[^<]+?>', '', websiteText)
     websiteText = cleanupString(websiteText)
-    strJS = ["JavaScript", "JS", "browser", "enable"]
     matchJS = 0
-    for s in strJS:
+    for s in jsErrors:
         if s in websiteText:
             matchJS += 1
     if matchJS >= 3:
         printError("Website failed JS test!")
         return ""
-    errors = ["Access Denied", "You don't have permission to access", "403 - Forbidden", "Access to this page is forbidden", "Why have I been blocked?", "This website is using a security service to protect itself from online attacks."]
-    for e in errors:
+    for e in blockedErrors:
         if e in websiteText:
             printError("Website failed error test!")
             return ""
-    if not bypassLength:
-        websiteText = splitBySentenceLength(websiteText, maxSentences)[0]
-    return websiteText
+    if not bypassLength and maxSentences > 0:
+        return trimTextBySentenceLength(websiteText, maxSentences)
+    else:
+        return websiteText

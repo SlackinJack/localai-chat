@@ -22,7 +22,8 @@ Very barebones & basic front-end for LocalAI written in Python3
 ## Road map and targets (mostly for myself):
 - main.py > triggers > openFile > support other OS (currently Ubuntu)
 - utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
-- search.py > getInfoFromWebsite > add timeout
+- add toggle for outputs "always-generate", "always-search", "auto"
+- file operations to-and-from server, file management from script
 
 
 ## Test environment:

@@ -35,7 +35,6 @@ intMaxSentences = int(configuration["MAX_SENTENCES"])
 strModelChat = configuration["CHAT_MODEL"]
 strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
-# shouldUseFunctions = (configuration["ENABLE_FUNCTIONS"] == "True")
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 enableStreamText = (configuration["ENABLE_TEXT_STREAMING"] == "True")
 
@@ -99,66 +98,10 @@ with open("templates/reply-template.tmpl", "r") as f:
         strReplyTemplate += l + "\n"
 
 
-#################################################
-################ BEGIN FUNCTIONS ################
-#################################################
-
-
-def function_search(args):
-    arg1 = args["prompt"]
-    arg2 = args["keywords"]
-    response = getSearchResponse(arg2, intMaxSources)
-    textResponse = response[0]
-    sourceResponse = response[1]
-    writeConversation("SYSTEM: " + textResponse)
-    return getAnswer(arg1, infoIn=textResponse, sourcesIn=sourceResponse, isOutput=True)
-
-
-def function_generate_image(args):
-    arg1 = args["prompt"]
-    return getImageResponse(arg1)
-
-
-availableFunctions = [
-    {
-        "name": "function_search",
-        "description": "Search for updated information.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "The prompt given by the user."
-                },
-                "keywords": {
-                    "type": "string",
-                    "description": "The topic or subject of the prompt.",
-                },
-            },
-            "required": ["prompt", "keywords"],
-        },
-    },
-    #{
-    #    "name": "function_generate_image",
-    #    "description": "Generate an image.",
-    #    "parameters": {
-    #        "type": "object",
-    #        "properties": {
-    #            "prompt": {
-    #                "type": "string",
-    #                "description": "The prompt given by the user."
-    #            },
-    #        },
-    #        "required": ["prompt"],
-    #    },
-    #},
-]
-
-
-functionMap = {
-    "function_search": function_search,
-    #"function_generate_image": function_generate_image,
-}
+strYNTemplate = ""
+with open("templates/yn-template.tmpl", "r") as f:
+    for l in f.readlines():
+        strYNTemplate += l + "\n"
 
 
 ##################################################
@@ -167,20 +110,15 @@ functionMap = {
 
 
 def keyword_search(promptIn):
-    return function_search(
-        {
-            "prompt": promptIn,
-            "keywords": getTopic(promptIn),
-        }
-    )
+    response = getSearchResponse(getTopic(promptIn), intMaxSources)
+    textResponse = response[0]
+    sourceResponse = response[1]
+    writeConversation("SYSTEM: " + textResponse)
+    return getAnswer(promptIn, info=textResponse, stream=True, sourcesIn=sourceResponse)
 
 
 def keyword_generate(promptIn):
-    return function_generate_image(
-        {
-            "prompt": promptIn,
-        }
-    )
+    return getImageResponse(promptIn)
 
 
 keywordsMap = {
@@ -211,21 +149,18 @@ keywordsMap = {
 
 
 def trigger_browse(promptIn):
-    strings = promptIn.split(" ")
-    for s in strings:
+    for s in promptIn.split(" "):
         if s.startswith("http"):
-            newPrompt = promptIn.replace(s, "")
             websiteText = getInfoFromWebsite(s, True)
             writeConversation("SYSTEM: " + websiteText)
-            return getAnswer(newPrompt, infoIn=websiteText, isOutput=True)
+            return getAnswer(promptIn.replace(s, ""), stream=True, info=websiteText)
 
 
 def trigger_openFile(promptIn):
-    filePath = (re.findall(r"'(.*?)'", promptIn, re.DOTALL))[0]
-    newPrompt = promptIn.replace("'" + filePath + "'", "")
+    filePath = getFilePathFromPrompt(promptIn)
     strFileContents = getFileContents(filePath)
     writeConversation("SYSTEM: " + strFileContents)
-    return getAnswer(newPrompt, infoIn=strFileContents, isOutput=True)
+    return getAnswer(promptIn.replace("'" + filePath + "'", ""), info=strFileContents, stream=True)
 
 
 triggerMap = {
@@ -237,6 +172,7 @@ triggerMap = {
     "'/"
     ]
 }
+
 
 ##################################################
 ################# BEGIN COMMANDS #################
@@ -321,51 +257,7 @@ commandMap = {
 }
 
 
-#################################################
-############### BEGIN COMPLETIONS ###############
-#################################################
-
-
-def chatPrompt(promptIn):
-    triggerAction = "none"
-    for key, value in triggerMap.items():
-        for v in value:
-            if v in promptIn:
-                return key(promptIn)
-    # if shouldUseFunctions:
-    return getKeywordResponse(promptIn)
-    # else:
-    # return getFunctionResponse(promptIn)
-
-
-def getKeywordResponse(promptIn):
-    printInfo("Using keywords...")
-    for key, value in keywordsMap.items():
-        for trigger in value:
-            if promptIn.startswith(trigger):
-                return key(promptIn.replace(trigger, ""))
-    printInfo("No keywords detected, generating chat output...")
-    return getReply(promptIn)
-
-
-#def getFunctionResponse(promptIn):
-#    writeConversation("USER: " + promptIn)
-#    printInfo("Using functions...")
-#    response = getFunctionCompletion(promptIn)
-#    if response[0]:
-#        functionName = response[1].name
-#        printDebug("Calling function: " + functionName)
-#        functionCall = functionMap[functionName]
-#        functionArgs = json.loads(response[1].arguments)
-#        functionOutput = functionCall(functionArgs)
-#        return functionOutput
-#    else:
-#        printDebug("No functions for prompt - the response will be completely generated!")
-#        writeConversation("ASSISTANT: " + response[1])
-#        return response[1]
-
-
-def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=None, sources=None):
+def getChatCompletion(promptIn, templateMode=0, shouldStreamText=False, infoIn=None, sources=None, shouldWriteToConversation=False):
     canStreamText = False
     if shouldStreamText and enableStreamText:
         canStreamText = True
@@ -373,6 +265,7 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
     global strReplyTemplate                #0 - chat model
     global strAnswerTemplate               #1 - comp model
     global strTopicTemplate                #2 - comp model
+    global strYNTemplate                   #3 - comp model
     strTemplatedPrompt = ""
     strModelToUse = strModelCompletion
     match templateMode:
@@ -380,6 +273,8 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case 2:
             strTemplatedPrompt = strTopicTemplate.replace("{{.Input}}", promptIn)
+        case 3:
+            strTemplatedPrompt = strYNTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case _:
             strTemplatedPrompt = strReplyTemplate.replace("{{.Input}}", promptIn)
             strModelToUse = strModelChat
@@ -393,12 +288,12 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
             strUser = line.replace("USER:", "")
         elif line.startswith("ASSISTANT:"):
             strAssistant = line.replace("ASSISTANT:", "")
-    if templateMode != 1 and templateMode != 2:
+    if templateMode != 1 and templateMode != 2 and templateMode != 3:
         prevConvo = ""
         for i in infoIn:
             prevConvo = prevConvo + "\n" + i
-        strSystem = prevConvo + "\nSYSTEM: " + strSystem
-        printDebug("Prompt (after templating):\n" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
+        printDebug("Prompt (after templating):\n" + prevConvo + "\n\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
+        strSystem = prevConvo + "\n\n" + strSystem
     else:
         printDebug("Prompt (after templating):\nSYSTEM:" + strSystem + "\nUSER:" + strUser + "\nASSISTANT:" + strAssistant)
     completion = openai.ChatCompletion.create(
@@ -428,47 +323,34 @@ def getChatCompletion(templateMode, promptIn, shouldStreamText=False, infoIn=Non
                 time.sleep(0.025)
                 sys.stdout.flush()
                 strOutput = strOutput + chunk.choices[0].delta.content
-        writeConversation("USER: " + strUser + "\n" + "ASSISTANT: " + strOutput)
+        if shouldWriteToConversation:
+            writeConversation("USER: " + strUser + "\n" + "ASSISTANT: " + strOutput)
         if sources is not None:
             printResponse("\n\n\n" + sources)
         return [False, strOutput]
     else:
         strOutput = completion.choices[0].message.content
-        writeConversation("USER: " + strUser + "\n" + "ASSISTANT: " + strOutput)
+        if shouldWriteToConversation:
+            writeConversation("USER: " + strUser + "\n" + "ASSISTANT: " + strOutput)
         if sources is not None:
             strOutput = strOutput + "\n\n\n" + sources
         return [True, strOutput]
 
 
 def getReply(promptIn):
-    return getChatCompletion(0, promptIn, True, getConversation())
+    return getChatCompletion(promptIn, 0, shouldStreamText=True, infoIn=getConversation(), shouldWriteToConversation=True)
 
 
-def getAnswer(promptIn, infoIn, sourcesIn=None, isOutput=False):
-    return getChatCompletion(1, promptIn, isOutput, infoIn, sourcesIn)
+def getAnswer(promptIn, info, stream=False, sourcesIn=None):
+    return getChatCompletion(promptIn, 1, shouldStreamText=stream, infoIn=info, sources=sourcesIn, shouldWriteToConversation=True)
 
 
 def getTopic(promptIn):
-    return getChatCompletion(2, promptIn)[1]
+    return getChatCompletion(promptIn, 2)[1]
 
 
-#def getFunctionCompletion(promptIn):
-#    completion = openai.ChatCompletion.create(
-#        model = strModelCompletion,
-#        messages = [
-#            {
-#                "role": "user",
-#                "content": promptIn
-#            },
-#        ],
-#        functions = availableFunctions,
-#        function_call = "auto",
-#    )
-#    response = completion.choices[0].message
-#    if "function_call" in response:
-#        return [True, response.function_call]
-#    else:
-#        return [False, response.content]
+def getYN(promptIn, i):
+    return getChatCompletion(promptIn, 3, shouldStreamText=False, infoIn=i)[1]
 
 
 def getImageResponse(promptIn):
@@ -487,17 +369,50 @@ def getImageResponse(promptIn):
     return "Your image is available at:\n\n" + completion.data[0].url
 
 
+##################################################
+################### BEGIN CHAT ###################
+##################################################
+
+
+def checkTriggers(promptIn):
+    triggerAction = "none"
+    for key, value in triggerMap.items():
+        for v in value:
+            if v in promptIn:
+                return key(promptIn)
+    printInfo("No triggers detected.")
+    return checkKeywords(promptIn)
+
+
+def checkKeywords(promptIn):
+    for key, value in keywordsMap.items():
+        for trigger in value:
+            if promptIn.startswith(trigger):
+                return key(promptIn.replace(trigger, ""))
+    printInfo("No keywords detected.")
+    return getResponse(promptIn)
+
+
+def getResponse(promptIn):
+    testCreative = getYN(promptIn, "original creative works, original ideas, new ideas, thoughts, feelings, emotions, opinions")
+    printDebug(testCreative)
+    if testCreative.startswith("yes") or testCreative.startswith("Yes"):
+        return getReply(promptIn)
+    else:
+        testFacts = getYN(promptIn, "news, biographies, landmarks, goods and services, economics")
+        printDebug(testFacts)
+        if testFacts.startswith("yes") or testFacts.startswith("Yes"):
+            return keyword_search(promptIn)
+        else:
+            return getReply(promptIn)
+
+
 def detectModelsNew():
     modelList = openai.Model.list()
     for model in modelList["data"]:
         modelName = model["id"]
         if modelName not in strIgnoredModels:
             listModels.append(modelName)
-
-
-##################################################
-################### BEGIN CHAT ###################
-##################################################
 
 
 def processCommand(promptIn):
@@ -507,6 +422,11 @@ def processCommand(promptIn):
                 key()
                 return True
     return False
+
+
+##################################################
+################### BEGIN MAIN ###################
+##################################################
 
 
 detectModelsNew()
@@ -531,7 +451,7 @@ while shouldRun:
         response = [False, None]
         printInfo("Generating response...")
         tic = time.perf_counter()
-        response = chatPrompt(strPrompt)
+        response = checkTriggers(strPrompt)
         toc = time.perf_counter()
         if response[0] and response[1] is not None:
             printSeparator()
