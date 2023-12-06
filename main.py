@@ -98,12 +98,6 @@ with open("templates/reply-template.tmpl", "r") as f:
         strReplyTemplate += l + "\n"
 
 
-strYNTemplate = ""
-with open("templates/yn-template.tmpl", "r") as f:
-    for l in f.readlines():
-        strYNTemplate += l + "\n"
-
-
 ##################################################
 ################# BEGIN KEYWORDS #################
 ##################################################
@@ -265,7 +259,6 @@ def getChatCompletion(promptIn, templateMode=0, shouldStreamText=False, infoIn=N
     global strReplyTemplate                #0 - chat model
     global strAnswerTemplate               #1 - comp model
     global strTopicTemplate                #2 - comp model
-    global strYNTemplate                   #3 - comp model
     strTemplatedPrompt = ""
     strModelToUse = strModelCompletion
     match templateMode:
@@ -273,8 +266,6 @@ def getChatCompletion(promptIn, templateMode=0, shouldStreamText=False, infoIn=N
             strTemplatedPrompt = strAnswerTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case 2:
             strTemplatedPrompt = strTopicTemplate.replace("{{.Input}}", promptIn)
-        case 3:
-            strTemplatedPrompt = strYNTemplate.replace("{{.Input}}", promptIn).replace("{{.Input2}}", infoIn)
         case _:
             strTemplatedPrompt = strReplyTemplate.replace("{{.Input}}", promptIn)
             strModelToUse = strModelChat
@@ -288,7 +279,7 @@ def getChatCompletion(promptIn, templateMode=0, shouldStreamText=False, infoIn=N
             strUser = line.replace("USER:", "")
         elif line.startswith("ASSISTANT:"):
             strAssistant = line.replace("ASSISTANT:", "")
-    if templateMode != 1 and templateMode != 2 and templateMode != 3:
+    if templateMode != 1 and templateMode != 2:
         prevConvo = ""
         for i in infoIn:
             prevConvo = prevConvo + "\n" + i
@@ -349,10 +340,6 @@ def getTopic(promptIn):
     return getChatCompletion(promptIn, 2)[1]
 
 
-def getYN(promptIn, i):
-    return getChatCompletion(promptIn, 3, shouldStreamText=False, infoIn=i)[1]
-
-
 def getImageResponse(promptIn):
     printInfo("Generating image with prompt: " + promptIn)
     completion = openai.Image.create(
@@ -394,17 +381,7 @@ def checkKeywords(promptIn):
 
 
 def getResponse(promptIn):
-    testCreative = getYN(promptIn, "original creative works, original ideas, new ideas, thoughts, feelings, emotions, opinions")
-    printDebug(testCreative)
-    if testCreative.startswith("yes") or testCreative.startswith("Yes"):
-        return getReply(promptIn)
-    else:
-        testFacts = getYN(promptIn, "news, biographies, landmarks, goods and services, economics")
-        printDebug(testFacts)
-        if testFacts.startswith("yes") or testFacts.startswith("Yes"):
-            return keyword_search(promptIn)
-        else:
-            return getReply(promptIn)
+    return getReply(promptIn)
 
 
 def detectModelsNew():
