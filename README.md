@@ -4,6 +4,14 @@
 
 Very barebones & basic front-end for LocalAI written in Python3
 
+
+*Please Note:
+This was created explicitly for specific personal tasks that I myself am too lazy to do.
+As such, it should only be treated as a patch-job/passion project.
+It will only be updated according to my needs, or adjusted to the environment I am using this in.
+Goals are only "nice to haves".*
+
+
 ## Current features (may change at any point):
 - Paste weblinks into the prompt and interact with just about any website that has text.
 - Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
@@ -20,10 +28,10 @@ Very barebones & basic front-end for LocalAI written in Python3
 
 
 ## Road map and targets (mostly for myself):
-- main.py > triggers > openFile > support other OS (currently Ubuntu)
-- utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
-- add toggle for outputs "always-generate", "always-search", "auto"
-- file operations to-and-from server, file management from script
+- (mid-high priority) add functions back eventually
+- (mid priority) file operations to-and-from server
+- (low priority) utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
+- (lowest priority) main.py > triggers > openFile > support other OS
 
 
 ## Test environment:
