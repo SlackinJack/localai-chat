@@ -28,7 +28,6 @@ Goals are only "nice to haves".*
 
 
 ## Road map and targets (mostly for myself):
-- (mid-high priority) add functions back eventually
 - (mid priority) file operations to-and-from server
 - (low priority) utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
 - (lowest priority) main.py > triggers > openFile > support other OS

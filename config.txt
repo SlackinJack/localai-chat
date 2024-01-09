@@ -20,8 +20,8 @@ COMPLETION_MODEL=jordan-7b
 
 
 # enable searching online
-# you can toggle this using offlinemode/onlinemode in runtime
-# useful if you want to strictly generate text (code generation)
+# you can toggle this in runtime using offlinemode / onlinemode commands
+# useful if you want to strictly generate text (eg. code generation)
 ENABLE_INTERNET=True
 
 
@@ -70,7 +70,7 @@ AUTO_OPEN_FILES=True
 # UwU-ify your assistant.................
 # yeah, no comment.
 # outputs may literally be illegible
-UWU_IFY=True
+UWU_IFY=False
 
 
 #################################################

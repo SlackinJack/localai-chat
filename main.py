@@ -126,6 +126,8 @@ def command_help():
     printGeneric("chatmodel")
     printGeneric("compmodel")
     printGeneric("sdmodel")
+    printGeneric("offlinemode")
+    printGeneric("onlinemode")
     printGeneric("exit/quit")
     return
 
