@@ -9,12 +9,25 @@ ADDRESS=http://localhost:8080/v1
 
 # set default chat model
 # leave empty for auto
+# this is the 'front-end' model
 CHAT_MODEL=jordan-7b
 
 
 # set default prompt model
 # leave empty for auto
-COMPLETION_MODEL=
+# this is the 'back-end' model
+COMPLETION_MODEL=jordan-7b
+
+
+# enable searching online
+# you can toggle this using offlinemode/onlinemode in runtime
+# useful if you want to strictly generate text (code generation)
+ENABLE_INTERNET=True
+
+
+# enable loopback on search
+# may cause infinite loops!
+SEARCH_LOOPBACK=True
 
 
 # set debug level
@@ -23,10 +36,6 @@ COMPLETION_MODEL=
 # 1 - error
 # 0 - disable
 DEBUG_LEVEL=3
-
-
-# enable text streaming in responses
-ENABLE_TEXT_STREAMING=True
 
 
 # models to ignore (stablediffusion models, folders, etc.)
@@ -38,7 +47,7 @@ IGNORED_MODELS=stablediffusion,assets,configs,lunademo,example,test
 # low values may affect data quality
 # high values will increase processing time
 # remember to (in/de)crease context size
-MAX_SENTENCES=4
+MAX_SENTENCES=5
 
 
 # max number of sources to consider
@@ -46,7 +55,7 @@ MAX_SENTENCES=4
 # low values may affect data diversity
 # high values will increase processing time
 # remember to (in/de)crease context size 
-MAX_SOURCES=3
+MAX_SOURCES=5
 
 
 # api key (cannot be empty)
@@ -56,6 +65,12 @@ KEY=sx-xxx
 # automatically open files on completion
 # eg. generated images, audio files, etc.
 AUTO_OPEN_FILES=True
+
+
+# UwU-ify your assistant.................
+# yeah, no comment.
+# outputs may literally be illegible
+UWU_IFY=True
 
 
 #################################################

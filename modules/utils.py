@@ -33,12 +33,33 @@ def printInfo(string):
         print(colored(string, "yellow"))
 
 
-def printResponse(string, endIn="\n"):
-    print(colored(string, "green"), end=endIn)
+def printResponse(string, endIn="\n", modifier = False):
+    # TODO: break print
+    if modifier and endIn == "":
+        outString = string.lower()
+        match string:
+            case "o":
+                outString = "OwO"
+            case "u":
+                outString = "UwU"
+            case "m":
+                outString = "mmm"
+            case "i":
+                outString = "ii"
+            case "c":
+                outString = "k"
+            case "r":
+                outString = "w"
+        print(colored(outString, "green"), end=endIn)
+        return
+    else:
+        print(colored(string, "green"), end=endIn)
+        return
 
 
 def printGeneric(string):
     print(colored(string, "light_grey"))
+    return
 
 
 def printError(string):
@@ -93,3 +114,4 @@ def checkEmptyString(strIn):
         if s not in blanks:
             return False
     return True
+
