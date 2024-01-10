@@ -18,7 +18,7 @@ def getSearchResponse(keywords, maxSources, maxSentences):
     printDebug("Search term(s):\n" + keywords)
     searchResults = {} #href, text
     sources = searchDDG(keywords, maxSources)
-    printDebug("Target links:\n")
+    printDebug("Target links:")
     for href in sources:
         printDebug("   - " + href)
     for href in sources:

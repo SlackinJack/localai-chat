@@ -91,7 +91,8 @@ def trigger_browse(promptIn):
         if s.startswith("http"):
             websiteText = getInfoFromWebsite(s, True)
             printDebug("Website text:\n" + websiteText)
-            getChatCompletion(promptIn.replace(s, ""), strModelChat, additionalInfo = "Consider the following text in your response: " + websiteText)
+            writeConversation("SYSTEM: Consider the following text in your response: " + websiteText)
+            getChatCompletion(promptIn.replace(s, ""), strModelChat)
     return
 
 
@@ -99,7 +100,8 @@ def trigger_openFile(promptIn):
     filePath = getFilePathFromPrompt(promptIn)
     fileContents = getFileContents(filePath)
     printDebug("File text:\n" + fileContents)
-    getChatCompletion(promptIn.replace(filePath, ""), strModelChat, additionalInfo = "Consider the following text in your response: " + fileContents)
+    writeConversation("SYSTEM: Consider the following text in your response: " + fileContents)
+    getChatCompletion(promptIn.replace(filePath, ""), strModelChat)
     # TODO: non-local files
     return
 
@@ -126,8 +128,8 @@ def command_help():
     printGeneric("chatmodel")
     printGeneric("compmodel")
     printGeneric("sdmodel")
-    printGeneric("offlinemode")
-    printGeneric("onlinemode")
+    printGeneric("offline")
+    printGeneric("online")
     printGeneric("exit/quit")
     return
 
@@ -221,11 +223,11 @@ commandMap = {
 }
 
 
-def getChatCompletion(userPromptIn, modelIn, additionalInfo=""):
+def getChatCompletion(userPromptIn, modelIn):
     if shouldUwU:
-        systemPrompt = templateChatCompletionSystemUwU + additionalInfo
+        systemPrompt = templateChatCompletionSystemUwU
     else:
-        systemPrompt = templateChatCompletionSystem + additionalInfo
+        systemPrompt = templateChatCompletionSystem
     promptHistory = getPromptHistory()
     promptHistory.append(
         {
@@ -251,7 +253,7 @@ def getChatCompletion(userPromptIn, modelIn, additionalInfo=""):
             time.sleep(0.025)
             sys.stdout.flush()
             assistantResponse = assistantResponse + chunk.choices[0].delta.content
-    writeConversation("SYSTEM: " + systemPrompt)
+    #writeConversation("SYSTEM: " + systemPrompt)
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -273,12 +275,7 @@ availableFunctions = [
                 },
                 "search_terms": {
                     "type": "string",
-                    "description": """
-                        You will generate a keyword, or a short search term, for the topic or question that you are trying to answer.
-                        It must be related to the needs or the inquiry from USER.
-                        It must be short, precise and specific, while being adaquately descriptive.
-                        You must consider the context of the current conversation when it is relevant.
-                    """,
+                    "description": templateFunctionResponseSearchTerms,
                 },
             },
             "required": ["action", "search_terms"],
@@ -293,14 +290,13 @@ def function_result(action, search_terms):
 
 def getFunctionResponse(promptIn):
     searchedTerms = []
-    additionalPrompts = "" 
     hrefs = []
     while True:
         promptHistory = getPromptHistory()
         promptHistory.append(
             {
                 "role": "system",
-                "content": templateFunctionResponseSystem + additionalPrompts,
+                "content": templateFunctionResponseSystem,
             }
         )
         promptHistory.append(
@@ -319,29 +315,32 @@ def getFunctionResponse(promptIn):
         )
         arguments = json.loads(completion.choices[0].message.function_call.arguments)
         printInfo("Next determined action is: " + arguments.get("action"))
-        match arguments.get("action"):
-            case "REPLY_TO_CONVERSATION":
-                break
-            case "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION":
-                currentSearchString = arguments.get("search_terms")
-                if currentSearchString in searchedTerms:
-                    printError("Searching for the same search terms! Breaking out of loop.")
+        if arguments.get("action"):
+            match arguments.get("action"):
+                case "REPLY_TO_CONVERSATION":
                     break
-                else:
-                    searchedTerms.append(currentSearchString)
-                    searchResults = getSearchResponse(currentSearchString, intMaxSources, intMaxSentences)
-                    if len(searchResults) > 0:
-                        for key, value in searchResults.items():
-                            additionalPrompts += "\nThe following is a search result - consider this in your next response: " + value + "(" + key + ")"
-                            hrefs.append(key)
-                    if not shouldLoopbackSearch:
-                        printInfo("You have search loopback disabled, not searching anymore.")
+                case "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION":
+                    currentSearchString = arguments.get("search_terms")
+                    if currentSearchString in searchedTerms:
+                        printError("Searching for the same search terms! Breaking out of loop.")
                         break
                     else:
-                        printDebug("Looping back with search results.")
+                        searchedTerms.append(currentSearchString)
+                        searchResults = getSearchResponse(currentSearchString, intMaxSources, intMaxSentences)
+                        if len(searchResults) > 0:
+                            for key, value in searchResults.items():
+                                writeConversation("SYSTEM: The following is a search result - consider this in your next response: " + value + "(" + key + ")")
+                                hrefs.append(key)
+                        if not shouldLoopbackSearch:
+                            printInfo("You have search loopback disabled, not searching anymore.")
+                            break
+                        else:
+                            printDebug("Looping back with search results.")
+        else:
+            printError("Function generation failed! Defaulting to chat generation.")
     getChatCompletion(promptIn, strModelChat)
     if len(hrefs) > 0:
-        printSuccess("Sources:\n")
+        printSuccess("\n\n\nSources analyzed:\n")
         for h in hrefs:
             printSuccess(h)
     return
@@ -412,7 +411,6 @@ def getResponse(promptIn):
 def getPromptHistory():
     conversation = getConversation()
     promptHistoryStrings = []
-    promptHistory = []
     stringBuilder = ""
     for line in conversation:
         if line.startswith("SYSTEM: ") or line.startswith("USER: ") or line.startswith("ASSISTANT: "):
@@ -420,10 +418,12 @@ def getPromptHistory():
                 stringBuilder += line
             else:
                 promptHistoryStrings.append(stringBuilder)
-                stringBuider = line
+                stringBuilder = "" + line
         else:
             stringBuilder += line
     promptHistoryStrings.append(stringBuilder)
+    print(str(promptHistoryStrings))
+    promptHistory = []
     for entry in promptHistoryStrings:
         if len(entry) > 0:
             if entry.startswith("SYSTEM: "):
@@ -488,7 +488,6 @@ while True:
     if strPrompt == "exit" or strPrompt == "quit":
         break
     else:
-        printInfo("Generating response...")
         tic = time.perf_counter()
         handlePrompt(strPrompt)
         toc = time.perf_counter()
