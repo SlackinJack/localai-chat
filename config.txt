@@ -30,12 +30,18 @@ ENABLE_INTERNET=False
 SEARCH_LOOPBACK=True
 
 
+# max times to loopback
+# set to a realistic number to prevent infinite loops
+# but not too low that we cant a good dataset
+MAX_SEARCH_LOOPBACK_ITERATIONS=7
+
+
 # set debug level
 # 3 - debug
 # 2 - info
 # 1 - error
 # 0 - disable
-DEBUG_LEVEL=2
+DEBUG_LEVEL=3
 
 
 # models to ignore (stablediffusion models, folders, etc.)
@@ -71,7 +77,7 @@ AUTO_OPEN_FILES=True
 # yeah, no comment.
 # outputs may literally be illegible
 # very beta, probably broken to some extent
-UWU_IFY=True
+UWU_IFY=False
 
 
 #################################################

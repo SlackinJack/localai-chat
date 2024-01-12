@@ -39,6 +39,7 @@ strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
+intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 shouldUwU = (configuration["UWU_IFY"] == "True")
 
@@ -310,6 +311,7 @@ def function_result(action, search_terms):
 
 
 def getFunctionResponse(promptIn):
+    timesSearched = 0
     searchedTerms = []
     hrefs = []
     while True:
@@ -349,7 +351,7 @@ def getFunctionResponse(promptIn):
                 case "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION":
                     currentSearchString = arguments.get("search_terms")
                     if currentSearchString in searchedTerms:
-                        printError("Searching for the same search terms! Breaking out of loop.")
+                        printError("Duplicated previous search terms! Breaking out of loop.")
                         break
                     else:
                         searchedTerms.append(currentSearchString)
@@ -359,8 +361,14 @@ def getFunctionResponse(promptIn):
                                 if key not in hrefs:
                                     hrefs.append(key)
                                     writeConversation("DATA: " + value + "(" + key + ")")
+                                else:
+                                    printDebug("Skipped duplicate source: " + key)
+                        timesSearched += 1
                         if not shouldLoopbackSearch:
-                            printInfo("You have search loopback disabled, not searching anymore.")
+                            printInfo("You have search loopback disabled. Breaking out of loop.")
+                            break
+                        elif timesSearched >= intMaxLoopbackIterations:
+                            printInfo("Maximum number of searches reached! Breaking out of loop.")
                             break
                         else:
                             printDebug("Looping back with search results.")
