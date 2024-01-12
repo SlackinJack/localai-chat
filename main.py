@@ -91,8 +91,8 @@ def trigger_browse(promptIn):
         if s.startswith("http"):
             websiteText = getInfoFromWebsite(s, True)
             printDebug("Website text:\n" + websiteText)
-            writeConversation("SYSTEM: Consider the following text in your response: " + websiteText)
-            getChatCompletion(promptIn.replace(s, ""), strModelChat)
+            writeConversation("DATA: " + websiteText)
+            getChatCompletion(promptIn.replace(s, ""))
     return
 
 
@@ -100,8 +100,8 @@ def trigger_openFile(promptIn):
     filePath = getFilePathFromPrompt(promptIn)
     fileContents = getFileContents(filePath)
     printDebug("File text:\n" + fileContents)
-    writeConversation("SYSTEM: Consider the following text in your response: " + fileContents)
-    getChatCompletion(promptIn.replace(filePath, ""), strModelChat)
+    writeConversation("DATA: " + fileContents)
+    getChatCompletion(promptIn.replace(filePath, ""))
     # TODO: non-local files
     return
 
@@ -151,22 +151,30 @@ def command_convo():
 
 
 def command_chat_model():
+    # TODO: autofill model names
     global strModelChat
     printGeneric("Available models: " + str(listModels))
+    printGeneric("Tip: you can type partial names.")
     model = printInput("Select model for chat (leave empty for current '" + strModelChat + "'): ")
     if len(model) == 0:
         model = strModelChat
+    else:
+        model = modelAutocomplete(model)
     strModelChat = model
     printSuccess("Chat model set to: " + model)
     return
 
 
 def command_comp_model():
+    # TODO: autofill model names
     global strModelCompletion
     printGeneric("Available models: " + str(listModels))
+    printGeneric("Tip: you can type partial names.")
     model = printInput("Select model for chat (leave empty for current '" + strModelCompletion + "'): ")
     if len(model) == 0:
         model = strModelCompletion
+    else:
+        model = modelAutocomplete(model)
     strModelCompletion = model
     printSuccess("Completion model set to: " + model)
     return
@@ -180,6 +188,13 @@ def command_sd_model():
     strModelStableDiffusion = model
     printSuccess("Stable Diffusion model set to: " + model)
     return
+
+
+def modelAutocomplete(modelNameIn):
+    for model in listModels:
+        if model.startswith(modelNameIn) or model == modelNameIn:
+            return model
+    return None
 
 
 def command_offline():
@@ -223,7 +238,7 @@ commandMap = {
 }
 
 
-def getChatCompletion(userPromptIn, modelIn):
+def getChatCompletion(userPromptIn):
     if shouldUwU:
         systemPrompt = templateChatCompletionSystemUwU
     else:
@@ -241,19 +256,25 @@ def getChatCompletion(userPromptIn, modelIn):
             "content": userPromptIn,
         }
     )
+    promptHistory.append(
+        {
+            "role": "assistant",
+            "content": "",
+        }
+    )
     completion = openai.ChatCompletion.create(
-        model = modelIn,
+        model = strModelChat,
         stream = True,
         messages = promptHistory,
     )
     assistantResponse = ""
+    
     for chunk in completion:
         if chunk.choices[0].delta.content is not None:
             printResponse(chunk.choices[0].delta.content, "", modifier = shouldUwU)
-            time.sleep(0.025)
+            time.sleep(0.020)
             sys.stdout.flush()
             assistantResponse = assistantResponse + chunk.choices[0].delta.content
-    #writeConversation("SYSTEM: " + systemPrompt)
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -305,6 +326,12 @@ def getFunctionResponse(promptIn):
                 "content": promptIn,
             }
         )
+        promptHistory.append(
+            {
+                "role": "assistant",
+                "content": "",
+            }
+        )
         completion = openai.ChatCompletion.create(
             model = strModelCompletion,
             messages = promptHistory,
@@ -329,8 +356,9 @@ def getFunctionResponse(promptIn):
                         searchResults = getSearchResponse(currentSearchString, intMaxSources, intMaxSentences)
                         if len(searchResults) > 0:
                             for key, value in searchResults.items():
-                                writeConversation("SYSTEM: The following is a search result - consider this in your next response: " + value + "(" + key + ")")
-                                hrefs.append(key)
+                                if key not in hrefs:
+                                    hrefs.append(key)
+                                    writeConversation("DATA: " + value + "(" + key + ")")
                         if not shouldLoopbackSearch:
                             printInfo("You have search loopback disabled, not searching anymore.")
                             break
@@ -338,7 +366,7 @@ def getFunctionResponse(promptIn):
                             printDebug("Looping back with search results.")
         else:
             printError("Function generation failed! Defaulting to chat generation.")
-    getChatCompletion(promptIn, strModelChat)
+    getChatCompletion(promptIn)
     if len(hrefs) > 0:
         printSuccess("\n\n\nSources analyzed:\n")
         for h in hrefs:
@@ -379,7 +407,7 @@ def handlePrompt(promptIn):
                 getFunctionResponse(promptIn)
             else:
                 printInfo("You have disabled internet access! Generating offline response.")
-                getChatCompletion(promptIn, strModelChat)
+                getChatCompletion(promptIn)
     return
 
 
@@ -397,7 +425,7 @@ def checkTriggers(promptIn):
     for key, value in triggerMap.items():
         for v in value:
             if v in promptIn:
-                printDebug("Calling trigger: " + key)
+                printDebug("Calling trigger: " + str(key))
                 key(promptIn)
                 return True
     printDebug("No triggers detected.")
@@ -413,7 +441,7 @@ def getPromptHistory():
     promptHistoryStrings = []
     stringBuilder = ""
     for line in conversation:
-        if line.startswith("SYSTEM: ") or line.startswith("USER: ") or line.startswith("ASSISTANT: "):
+        if line.startswith("SYSTEM: ") or line.startswith("USER: ") or line.startswith("ASSISTANT: ") or line.startswith("DATA: " ):
             if len(stringBuilder) == 0:
                 stringBuilder += line
             else:
@@ -422,7 +450,6 @@ def getPromptHistory():
         else:
             stringBuilder += line
     promptHistoryStrings.append(stringBuilder)
-    print(str(promptHistoryStrings))
     promptHistory = []
     for entry in promptHistoryStrings:
         if len(entry) > 0:
@@ -445,6 +472,13 @@ def getPromptHistory():
                     {
                         "role": "assistant",
                         "content": entry.replace("ASSISTANT: ", "", 1),
+                    }
+                )
+            elif entry.startswith("DATA: "):
+                promptHistory.append(
+                    {
+                        "role": "data",
+                        "content": entry.replace("DATA: ", "", 1),
                     }
                 )
     return promptHistory
@@ -477,7 +511,7 @@ printInfo("SD model ('sdmodel' to change): " + strModelStableDiffusion)
 
 
 while True:
-    printInfo("Current conversation file: " + strConvoName + ".convo")
+    printInfo("\nCurrent conversation file: " + strConvoName + ".convo")
     if shouldUseInternet:
         printInfo("Internet access is enabled.")
     else:

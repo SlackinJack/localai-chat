@@ -1,4 +1,5 @@
 import os
+import random
 import re
 
 from termcolor import colored
@@ -37,19 +38,49 @@ def printResponse(string, endIn="\n", modifier = False):
     # TODO: break print
     if modifier and endIn == "":
         outString = string.lower()
-        match string:
-            case "o":
-                outString = "OwO"
-            case "u":
-                outString = "UwU"
-            case "m":
-                outString = "mmm"
-            case "i":
-                outString = "ii"
-            case "c":
-                outString = "k"
-            case "r":
-                outString = "w"
+        if random.randint(0, 100) > 15:
+            match string:
+                case "m":
+                    outString = "mm"
+                case "n":
+                    outString = "nn"
+                case "i":
+                    outString = "ii"
+                case "c":
+                    outString = "k"
+                case "l":
+                    outString = "w"
+                case "r":
+                    outString = "w"
+                case "y":
+                    outString = "yyy"
+                case "g":
+                    outString = "gg"
+                case ",":
+                    if random.randint(0, 100) > 95:
+                        outString = "..."
+                case ".":
+                    if random.randint(0, 100) > 95:
+                        outString = "......"
+                    elif random.randint(0, 100) > 90:
+                        outString = "..."
+                case "o":
+                    if random.randint(0, 100) > 95:
+                        outString = "OwO"
+                    else:
+                        outString = "oo"
+                case "u":
+                    if random.randint(0, 100) > 95:
+                        outString = "UwU"
+                    else:
+                        outString = "uu"
+                case "\n":
+                    if random.randint(0, 100) > 90:
+                        outString = "\nuhhhh "
+                    elif random.randint(0, 100) > 90:
+                        outString = "\nmmm "
+                    elif random.randint(0, 100) > 90:
+                        outString = "\numm "
         print(colored(outString, "green"), end=endIn)
         return
     else:

@@ -38,4 +38,4 @@ Goals are only "nice to haves".*
 - NVidia Quadro P2000 5GB, Cuda 12.3
 - Xeon X5650
 - Python 3.10
-- Model(s): uncensored-jordan-7b.Q5_K_M
+- Model(s): uncensored-jordan-7b.Q2_K

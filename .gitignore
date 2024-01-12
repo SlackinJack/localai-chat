@@ -1,6 +1,6 @@
+.git
+.git/*
 modules/__pycache__
 modules/__pycache__/*
 conversations/*
-!conversations/bigben.convo
-!conversations/timessquare.convo
-!conversations/ddg.convo
+!conversations/.keep
