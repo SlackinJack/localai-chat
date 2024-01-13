@@ -23,7 +23,7 @@ COMPLETION_MODEL=jordan-7b
 # should disable if you are doing lots of unrelated prompts (eg. code generation)
 # if you disable, i would suggest using 'burner conversation files'
 # toggle at runtime with 'historyon' and 'historyoff'
-CHAT_HISTORY_CONSIDERATION=True
+CHAT_HISTORY_CONSIDERATION=False
 
 
 # enable searching online
@@ -44,7 +44,7 @@ SEARCH_LOOPBACK=True
 # max times to loopback
 # set to a realistic number
 # but not too low that we cant a good dataset
-MAX_SEARCH_LOOPBACK_ITERATIONS=7
+MAX_SEARCH_LOOPBACK_ITERATIONS=5
 
 
 # set debug level
@@ -64,7 +64,7 @@ IGNORED_MODELS=stablediffusion,assets,configs,lunademo,example,test
 # low values may affect data quality
 # high values will increase processing time
 # remember to (in/de)crease context size
-MAX_SENTENCES=15
+MAX_SENTENCES=10
 
 
 # max number of sources to consider

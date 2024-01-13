@@ -152,7 +152,6 @@ def command_convo():
 
 
 def command_chat_model():
-    # TODO: autofill model names
     global strModelChat
     printGeneric("Available models: " + str(listModels))
     printGeneric("Tip: you can type partial names.")
@@ -174,7 +173,6 @@ def command_chat_model():
 
 
 def command_comp_model():
-    # TODO: autofill model names
     global strModelCompletion
     printGeneric("Available models: " + str(listModels))
     printGeneric("Tip: you can type partial names.")
@@ -248,6 +246,7 @@ def command_help():
         commandName = value[0]
         if len(commandName) > 0:
             printGeneric(" - " + commandName)
+    printGeneric(" - generate [prompt]")
     printGeneric(" - exit / quit")
     return
 
@@ -309,12 +308,6 @@ def getChatCompletion(userPromptIn):
             "content": userPromptIn,
         }
     )
-    #promptHistory.append(
-    #    {
-    #        "role": "assistant",
-    #        "content": "",
-    #    }
-    #)
     completion = openai.ChatCompletion.create(
         model = strModelChat,
         stream = True,
@@ -383,12 +376,6 @@ def getFunctionResponse(promptIn):
                 "content": promptIn,
             }
         )
-        #promptHistory.append(
-        #    {
-        #        "role": "assistant",
-        #        "content": "",
-        #    }
-        #)
         completion = openai.ChatCompletion.create(
             model = strModelCompletion,
             messages = promptHistory,
@@ -594,6 +581,10 @@ while True:
     printSeparator()
     if strPrompt == "exit" or strPrompt == "quit":
         break
+    elif strPrompt.startswith("generate"):
+        tic = time.perf_counter()
+        getImageResponse(strPrompt.replace("generate ", ""))
+        toc = time.perf_counter()
     else:
         tic = time.perf_counter()
         handlePrompt(strPrompt)

@@ -35,7 +35,7 @@ Goals are only "nice to haves".*
 ## Test environment:
 - Ubuntu Server 22.04
 - NVidia Quadro P2000 5GB, Cuda 12.3
-- Xeon X5650
+- 2x Xeon X5650
 - Python 3.10
 - Model(s): uncensored-jordan-7b.Q4_K_S, mistral-7b-instruct-v0.2-code-ft.Q4_K_S, Samantha-1.11-7b-ggml-model-q4_0
 - LocalAI 1.40.0 (main), LocalAI 2.5.1
