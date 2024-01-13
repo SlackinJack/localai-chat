@@ -35,7 +35,6 @@ def printInfo(string):
 
 
 def printResponse(string, endIn="\n", modifier = False):
-    # TODO: break print
     if modifier and endIn == "":
         outString = string.lower()
         if random.randint(0, 100) > 15:
@@ -96,6 +95,10 @@ def printGeneric(string):
 def printError(string):
     if int(configuration["DEBUG_LEVEL"]) >= 1:
         print(colored(string, "red"))
+
+
+def printRed(string):
+    print(colored(string, "red"))
 
 
 def printSuccess(string):

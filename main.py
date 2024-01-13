@@ -9,8 +9,8 @@ from pathlib import Path
 
 from modules.openfile import *
 from modules.search import *
-from modules.templates import *
 from modules.utils import *
+from templates import *
 
 # TODO:
 # add error-catch to completion requests
@@ -42,6 +42,7 @@ shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
 intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 shouldUwU = (configuration["UWU_IFY"] == "True")
+shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
@@ -123,15 +124,12 @@ triggerMap = {
 ##################################################
 
 
-def command_help():
-    printGeneric("Available commands: ")
-    printGeneric("convo")
-    printGeneric("chatmodel")
-    printGeneric("compmodel")
-    printGeneric("sdmodel")
-    printGeneric("offline")
-    printGeneric("online")
-    printGeneric("exit/quit")
+def command_clear():
+    i = 0
+    j = 64
+    while i <= j:
+        printGeneric("\n")
+        i +=1
     return
 
 
@@ -143,7 +141,9 @@ def command_convo():
     printGeneric("Conversations available: ")
     for convo in convoList:
         printGeneric(convo)
+    printSeparator()
     convoName = printInput("Select a conversation to use, create a new one by using an unique name, or leave blank for auto-generated: ")
+    printSeparator()
     if len(convoName) == 0:
         convoName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     setConversation(convoName)
@@ -156,12 +156,19 @@ def command_chat_model():
     global strModelChat
     printGeneric("Available models: " + str(listModels))
     printGeneric("Tip: you can type partial names.")
+    printSeparator()
     model = printInput("Select model for chat (leave empty for current '" + strModelChat + "'): ")
     if len(model) == 0:
         model = strModelChat
     else:
-        model = modelAutocomplete(model)
+        testModel = modelAutocomplete(model)
+        if testModel is not None:
+            model = testModel
+        else:
+            printError("Model not found! Keeping current model '" + strModelChat + "'")
+            return
     strModelChat = model
+    printSeparator()
     printSuccess("Chat model set to: " + model)
     return
 
@@ -171,22 +178,31 @@ def command_comp_model():
     global strModelCompletion
     printGeneric("Available models: " + str(listModels))
     printGeneric("Tip: you can type partial names.")
+    printSeparator()
     model = printInput("Select model for chat (leave empty for current '" + strModelCompletion + "'): ")
     if len(model) == 0:
         model = strModelCompletion
     else:
-        model = modelAutocomplete(model)
+        testModel = modelAutocomplete(model)
+        if testModel is not None:
+            model = testModel
+        else:
+            printError("Model not found! Keeping current model '" + strModelCompletion + "'")
+            return
     strModelCompletion = model
+    printSeparator()
     printSuccess("Completion model set to: " + model)
     return
 
 
 def command_sd_model():
     global strModelStableDiffusion
+    printSeparator()
     model = printInput("Select model for Stable Diffusion (leave empty for current '" + strModelStableDiffusion + "'): ")
     if len(model) == 0:
         model = strModelStableDiffusion
     strModelStableDiffusion = model
+    printSeparator()
     printSuccess("Stable Diffusion model set to: " + model)
     return
 
@@ -201,7 +217,7 @@ def modelAutocomplete(modelNameIn):
 def command_offline():
     global shouldUseInternet
     shouldUseInternet = False
-    printError("Set to offline mode!")
+    printRed("Set to offline mode!")
     return
 
 
@@ -212,11 +228,38 @@ def command_online():
     return
 
 
+def command_historyon():
+    global shouldConsiderHistory
+    shouldConsiderHistory = True
+    printSuccess("Now using chat history in prompts!")
+    return
+
+
+def command_historyoff():
+    global shouldConsiderHistory
+    shouldConsiderHistory = True
+    printRed("Not using chat history in prompts!")
+    return
+
+
+def command_help():
+    printGeneric("Available commands:")
+    for entry, value in commandMap.items():
+        commandName = value[0]
+        if len(commandName) > 0:
+            printGeneric(" - " + commandName)
+    printGeneric(" - exit / quit")
+    return
+
+
 commandMap = {
     command_help: [
         "",
         "help",
         "?",
+    ],
+    command_clear: [
+        "clear",
     ],
     command_convo: [
         "convo",
@@ -236,6 +279,12 @@ commandMap = {
     command_offline: [
         "offline",
     ],
+    command_historyon: [
+        "historyon",
+    ],
+    command_historyoff: [
+        "historyoff",
+    ],
 }
 
 
@@ -244,7 +293,10 @@ def getChatCompletion(userPromptIn):
         systemPrompt = templateChatCompletionSystemUwU
     else:
         systemPrompt = templateChatCompletionSystem
-    promptHistory = getPromptHistory()
+    if shouldConsiderHistory:
+        promptHistory = getPromptHistory()
+    else:
+        promptHistory = []
     promptHistory.append(
         {
             "role": "system",
@@ -315,7 +367,10 @@ def getFunctionResponse(promptIn):
     searchedTerms = []
     hrefs = []
     while True:
-        promptHistory = getPromptHistory()
+        if shouldConsiderHistory:
+            promptHistory = getPromptHistory()
+        else:
+            promptHistory = []
         promptHistory.append(
             {
                 "role": "system",
@@ -360,7 +415,7 @@ def getFunctionResponse(promptIn):
                             for key, value in searchResults.items():
                                 if key not in hrefs:
                                     hrefs.append(key)
-                                    writeConversation("DATA: " + value + "(" + key + ")")
+                                    writeConversation("DATA: " + "(From " + key + ")" + value)
                                 else:
                                     printDebug("Skipped duplicate source: " + key)
                         timesSearched += 1
@@ -414,7 +469,7 @@ def handlePrompt(promptIn):
             if shouldUseInternet:
                 getFunctionResponse(promptIn)
             else:
-                printInfo("You have disabled internet access! Generating offline response.")
+                printInfo("You have disabled automatic internet searching! Generating offline response.")
                 getChatCompletion(promptIn)
     return
 
@@ -513,17 +568,27 @@ if len(strModelChat) == 0:
     strModelChat = listModels[0]
 if len(strModelCompletion) == 0:
     strModelCompletion = listModels[0]
-printInfo("Chat model ('chatmodel' to change): " + strModelChat)
-printInfo("Comp model ('compmodel' to change): " + strModelCompletion)
-printInfo("SD model ('sdmodel' to change): " + strModelStableDiffusion)
+printInfo("\n")
+printInfo("Current model settings:")
+printInfo("[CHAT] " + strModelChat)
+printInfo("[COMP] " + strModelCompletion)
+printInfo("[STDF] " + strModelStableDiffusion)
 
 
 while True:
-    printInfo("\nCurrent conversation file: " + strConvoName + ".convo")
+    printInfo("\n")
+    printInfo("Current settings:")
     if shouldUseInternet:
-        printInfo("Internet access is enabled.")
+        printInfo("[ON] Auto Internet Search")
     else:
-        printInfo("Internet access is disabled.")
+        printInfo("[OFF] Auto Internet Search")
+    if shouldConsiderHistory:
+        printInfo("[ON] Consider Chat History")
+    else:
+        printInfo("[OFF] Consider Chat History")
+    printInfo("\n")
+    printInfo("\nCurrent conversation file: " + strConvoName + ".convo")
+    printInfo("\n")
     printSeparator()
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()
@@ -534,4 +599,5 @@ while True:
         handlePrompt(strPrompt)
         toc = time.perf_counter()
         printDebug(f"\n\n{toc - tic:0.3f} seconds")
+        printGeneric("")
 

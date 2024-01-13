@@ -39,7 +39,7 @@ def searchDDG(keywords, maxSources):
                 hrefs.append(result.get("href"))
             break
         except:
-            if tries >= 3:
+            if tries >= 2:
                 printError("Couldn't load DuckDuckGo after 3 tries! Aborting search.")
                 return ""
             else:
