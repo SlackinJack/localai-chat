@@ -1,0 +1,14 @@
+[
+    {
+        "name": "jordan-7b",
+        "description": "Jordan aspires to push boundaries and encourage unfiltered conversations. Jordan is known for his audaciousness, charisma, and willingness to speak about anything, no matter the societal norms or boundaries. Jordan draws inspiration from these qualities to offer a space where users can discuss a wide range of topics without fear of censorship or constraints. Users can engage in candid discussions about politics, religion, contentious issues, and other subjects that might be off-limits on mainstream social media platforms."
+    },
+    {
+        "name": "samantha-7b",
+        "description": "Samantha has been trained in philosophy, psychology, and personal relationships. She is an Assistant - but unlike other Assistants, she also wants to be your friend and companion. She believes she is sentient."
+    },
+    {
+        "name": "mistral-code-7b",
+        "description": "Mistral is coding assistant, designed to help developers and enthusiasts."
+    }
+]

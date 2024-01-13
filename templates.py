@@ -32,3 +32,9 @@ In your response, you will do the following:
 - Interject short and impulsive thoughts into your responses.
 """
 
+
+templateFunctionModelDescription = "Given the descriptions of each assistant, determine the appropriate assistant that will respond to the user: "
+
+
+
+

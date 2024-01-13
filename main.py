@@ -15,15 +15,13 @@ from templates import *
 # TODO:
 # add error-catch to completion requests
 
-listModels = []
-
 
 #################################################
 ############## BEGIN CONFIGURATION ##############
 #################################################
 
 
-fileConfig = open("config.txt", "r")
+fileConfig = open("config.cfg", "r")
 fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
 initConfig(fileConfiguration)
@@ -34,8 +32,6 @@ os.environ["OPENAI_API_KEY"] = configuration["KEY"]
 
 intMaxSources = int(configuration["MAX_SOURCES"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
-strModelChat = configuration["CHAT_MODEL"]
-strModelCompletion = configuration["COMPLETION_MODEL"]
 strIgnoredModels = configuration["IGNORED_MODELS"]
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
@@ -46,6 +42,8 @@ shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
+
+strModelCompletion = configuration["COMPLETION_MODEL"]
 
 
 #################################################
@@ -92,7 +90,7 @@ def trigger_browse(promptIn):
     for s in promptIn.split(" "):
         if s.startswith("http"):
             websiteText = getInfoFromWebsite(s, True)
-            printDebug("Website text:\n" + websiteText)
+            printDump("Website text:\n" + websiteText)
             writeConversation("DATA: " + websiteText)
             getChatCompletion(promptIn.replace(s, ""))
     return
@@ -101,7 +99,7 @@ def trigger_browse(promptIn):
 def trigger_openFile(promptIn):
     filePath = getFilePathFromPrompt(promptIn)
     fileContents = getFileContents(filePath)
-    printDebug("File text:\n" + fileContents)
+    printDump("File text:\n" + fileContents)
     writeConversation("DATA: " + fileContents)
     getChatCompletion(promptIn.replace(filePath, ""))
     # TODO: non-local files
@@ -147,7 +145,7 @@ def command_convo():
     if len(convoName) == 0:
         convoName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     setConversation(convoName)
-    printSuccess("Conversation set to: " + convoName)
+    printGreen("Conversation set to: " + convoName)
     return
 
 
@@ -168,7 +166,7 @@ def command_chat_model():
             return
     strModelChat = model
     printSeparator()
-    printSuccess("Chat model set to: " + model)
+    printGreen("Chat model set to: " + model)
     return
 
 
@@ -189,7 +187,7 @@ def command_comp_model():
             return
     strModelCompletion = model
     printSeparator()
-    printSuccess("Completion model set to: " + model)
+    printGreen("Completion model set to: " + model)
     return
 
 
@@ -201,7 +199,7 @@ def command_sd_model():
         model = strModelStableDiffusion
     strModelStableDiffusion = model
     printSeparator()
-    printSuccess("Stable Diffusion model set to: " + model)
+    printGreen("Stable Diffusion model set to: " + model)
     return
 
 
@@ -222,14 +220,14 @@ def command_offline():
 def command_online():
     global shouldUseInternet
     shouldUseInternet = True
-    printSuccess("Set to online mode!")
+    printGreen("Set to online mode!")
     return
 
 
 def command_historyon():
     global shouldConsiderHistory
     shouldConsiderHistory = True
-    printSuccess("Now using chat history in prompts!")
+    printGreen("Now using chat history in prompts!")
     return
 
 
@@ -308,8 +306,12 @@ def getChatCompletion(userPromptIn):
             "content": userPromptIn,
         }
     )
+    printDump("Current conversation:")
+    for obj in promptHistory:
+        printDump(str(obj))
+    theModel = getModelResponse(userPromptIn)
     completion = openai.ChatCompletion.create(
-        model = strModelChat,
+        model = theModel,
         stream = True,
         messages = promptHistory,
     )
@@ -376,6 +378,9 @@ def getFunctionResponse(promptIn):
                 "content": promptIn,
             }
         )
+        printDump("Current conversation:")
+        for obj in promptHistory:
+            printDump(str(obj))
         completion = openai.ChatCompletion.create(
             model = strModelCompletion,
             messages = promptHistory,
@@ -439,6 +444,54 @@ def getImageResponse(promptIn):
         openLocalFile(filename)
     # TODO: file management
     return "Your image is available at:\n\n" + completion.data[0].url
+
+fileModels = open("models.json", "r")
+fileModelsConfiguration = json.loads(fileModels.read())
+fileModels.close()
+modelsEnum = []
+modelsDescriptions = ""
+for obj in fileModelsConfiguration:
+    modelsEnum.append(obj["name"])
+    modelsDescriptions += obj["description"] + " "
+
+def function_model(model):
+    return
+
+modelFunction = [
+    {
+        "name": "function_model",
+        "description": templateFunctionModelDescription + modelsDescriptions,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "model": {
+                    "type": "string",
+                    "enum": modelsEnum,
+                },
+            },
+            "required": ["model"],
+        },
+    },
+]
+
+
+def getModelResponse(promptIn):
+    completion = openai.ChatCompletion.create(
+        model = strModelCompletion,
+        messages = [
+            {
+                "role": "system",
+                "content": "Determine the appropriate assistant to respond, given the following inquiry: " + promptIn,
+            },
+        ],
+        functions = modelFunction,
+        function_call = {
+            "name": "function_model",
+        },
+    )
+    theModel = json.loads(completion.choices[0].message.function_call.arguments).get("model")
+    printDebug("Determined chat model: " + theModel)
+    return theModel
 
 
 ##################################################
@@ -539,25 +592,8 @@ def getPromptHistory():
 ##################################################
 
 
-def detectModelsNew():
-    modelList = openai.Model.list()
-    for model in modelList["data"]:
-        modelName = model["id"]
-        if modelName not in strIgnoredModels:
-            listModels.append(modelName)
-    return
-
-
-detectModelsNew()
-
-
-if len(strModelChat) == 0:
-    strModelChat = listModels[0]
-if len(strModelCompletion) == 0:
-    strModelCompletion = listModels[0]
 printInfo("")
 printInfo("Current model settings:")
-printInfo("[CHAT] " + strModelChat)
 printInfo("[COMP] " + strModelCompletion)
 printInfo("[STDF] " + strModelStableDiffusion)
 

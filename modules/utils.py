@@ -29,11 +29,6 @@ def printInput(string):
     return strInput
 
 
-def printInfo(string):
-    if int(configuration["DEBUG_LEVEL"]) >= 2:
-        print(colored(string, "yellow"))
-
-
 def printResponse(string, endIn="\n", modifier = False):
     if modifier and endIn == "":
         outString = string.lower()
@@ -92,22 +87,36 @@ def printGeneric(string):
     return
 
 
+def printSuccess(string):
+    print(colored(string, "green"))
+
+
+def printGreen(string):
+    print(colored(string, "light_green"))
+
+
+def printRed(string):
+    print(colored(string, "light_red"))
+
+
 def printError(string):
     if int(configuration["DEBUG_LEVEL"]) >= 1:
         print(colored(string, "red"))
 
 
-def printRed(string):
-    print(colored(string, "red"))
-
-
-def printSuccess(string):
-    print(colored(string, "green"))
+def printInfo(string):
+    if int(configuration["DEBUG_LEVEL"]) >= 2:
+        print(colored(string, "yellow"))
 
 
 def printDebug(string):
     if int(configuration["DEBUG_LEVEL"]) >= 3:
         print(colored(string, "light_grey"))
+
+
+def printDump(string):
+    if int(configuration["DEBUG_LEVEL"]) >= 4:
+        print(colored(string, "dark_grey"))
 
 
 def printSeparator():
