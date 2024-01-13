@@ -237,7 +237,7 @@ def command_historyon():
 
 def command_historyoff():
     global shouldConsiderHistory
-    shouldConsiderHistory = True
+    shouldConsiderHistory = False
     printRed("Not using chat history in prompts!")
     return
 
@@ -309,12 +309,12 @@ def getChatCompletion(userPromptIn):
             "content": userPromptIn,
         }
     )
-    promptHistory.append(
-        {
-            "role": "assistant",
-            "content": "",
-        }
-    )
+    #promptHistory.append(
+    #    {
+    #        "role": "assistant",
+    #        "content": "",
+    #    }
+    #)
     completion = openai.ChatCompletion.create(
         model = strModelChat,
         stream = True,
@@ -336,7 +336,7 @@ def getChatCompletion(userPromptIn):
 availableFunctions = [
     {
         "name": "function_result",
-        "description": "Determine the next appropriate action.",
+        "description": templateFunctionResponseDescription,
         "parameters": {
             "type": "object",
             "properties": {
@@ -383,12 +383,12 @@ def getFunctionResponse(promptIn):
                 "content": promptIn,
             }
         )
-        promptHistory.append(
-            {
-                "role": "assistant",
-                "content": "",
-            }
-        )
+        #promptHistory.append(
+        #    {
+        #        "role": "assistant",
+        #        "content": "",
+        #    }
+        #)
         completion = openai.ChatCompletion.create(
             model = strModelCompletion,
             messages = promptHistory,
@@ -568,7 +568,7 @@ if len(strModelChat) == 0:
     strModelChat = listModels[0]
 if len(strModelCompletion) == 0:
     strModelCompletion = listModels[0]
-printInfo("\n")
+printInfo("")
 printInfo("Current model settings:")
 printInfo("[CHAT] " + strModelChat)
 printInfo("[COMP] " + strModelCompletion)
@@ -576,7 +576,7 @@ printInfo("[STDF] " + strModelStableDiffusion)
 
 
 while True:
-    printInfo("\n")
+    printInfo("")
     printInfo("Current settings:")
     if shouldUseInternet:
         printInfo("[ON] Auto Internet Search")
@@ -586,9 +586,9 @@ while True:
         printInfo("[ON] Consider Chat History")
     else:
         printInfo("[OFF] Consider Chat History")
-    printInfo("\n")
-    printInfo("\nCurrent conversation file: " + strConvoName + ".convo")
-    printInfo("\n")
+    printInfo("")
+    printInfo("Current conversation file: " + strConvoName + ".convo")
+    printInfo("")
     printSeparator()
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()

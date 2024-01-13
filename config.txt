@@ -10,7 +10,7 @@ ADDRESS=http://localhost:8080/v1
 # set default chat model
 # leave empty for auto
 # this is the 'front-end' model
-CHAT_MODEL=jordan-7b
+CHAT_MODEL=samantha-7b
 
 
 # set default prompt model
@@ -33,12 +33,16 @@ ENABLE_INTERNET=False
 
 
 # enable loopback on search
-# may cause infinite loops!
+# it can be useful for complex prompts that require
+# multiple searches for differing topics (eg. compare this vs that, pros and cons, etc)
+# this can astronomically increase prompt times, especially on low-end hardware
+# this will also add to future prompt times on the same conversation
+# disable to prompt immediately after searching once
 SEARCH_LOOPBACK=True
 
 
 # max times to loopback
-# set to a realistic number to prevent infinite loops
+# set to a realistic number
 # but not too low that we cant a good dataset
 MAX_SEARCH_LOOPBACK_ITERATIONS=7
 
@@ -48,7 +52,7 @@ MAX_SEARCH_LOOPBACK_ITERATIONS=7
 # 2 - info
 # 1 - error
 # 0 - disable
-DEBUG_LEVEL=1
+DEBUG_LEVEL=3
 
 
 # models to ignore (stablediffusion models, folders, etc.)
@@ -60,7 +64,7 @@ IGNORED_MODELS=stablediffusion,assets,configs,lunademo,example,test
 # low values may affect data quality
 # high values will increase processing time
 # remember to (in/de)crease context size
-MAX_SENTENCES=7
+MAX_SENTENCES=15
 
 
 # max number of sources to consider

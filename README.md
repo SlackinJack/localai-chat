@@ -17,7 +17,6 @@ Goals are only "nice to haves".*
 - Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
 - Preliminal support for prompting on audio/video files.
 - Search duckduckgo based on generated search terms from your prompt, then answer your prompt based on what it found. (With sources!)
-- Generate responses only when appropriate (at least thats the goal anyway)
 - Autodetect, and change models on-the-fly
 - Text-streaming
 - Reply to conversations, load previous conversations or make new ones
@@ -38,4 +37,6 @@ Goals are only "nice to haves".*
 - NVidia Quadro P2000 5GB, Cuda 12.3
 - Xeon X5650
 - Python 3.10
-- Model(s): uncensored-jordan-7b.Q2_K
+- Model(s): uncensored-jordan-7b.Q4_K_S, mistral-7b-instruct-v0.2-code-ft.Q4_K_S, Samantha-1.11-7b-ggml-model-q4_0
+- LocalAI 1.40.0 (main), LocalAI 2.5.1
+
