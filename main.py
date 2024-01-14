@@ -10,44 +10,52 @@ from pathlib import Path
 from modules.openfile import *
 from modules.search import *
 from modules.utils import *
-from templates import *
 
 
 # TODO:
 # add error-catch to completion requests
+# kill llama every completion request
 
 
 listModels = []
+openai.api_key = OPENAI_API_KEY = "sk-xxx"
+os.environ["OPENAI_API_KEY"] = "sk-xxx"
 
 
 #################################################
 ############## BEGIN CONFIGURATION ##############
 #################################################
 
-
+#### CONFIGURATION LOADER ####
 fileConfig = open("config.cfg", "r")
 fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
 initConfig(fileConfiguration)
 
+##### MAIN CONFIGURATION #####
 openai.api_base = configuration["ADDRESS"]
-openai.api_key = OPENAI_API_KEY = "sk-xxx"
-os.environ["OPENAI_API_KEY"] = "sk-xxx"
-
-intMaxSources = int(configuration["MAX_SOURCES"])
-intMaxSentences = int(configuration["MAX_SENTENCES"])
 strModelChat = configuration["CHAT_MODEL"]
 strModelCompletion = configuration["COMPLETION_MODEL"]
-strIgnoredModels = configuration["IGNORED_MODELS"]
-shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
+shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
+shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
 intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
-shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
+strIgnoredModels = configuration["IGNORED_MODELS"]
+intMaxSources = int(configuration["MAX_SOURCES"])
+intMaxSentences = int(configuration["MAX_SENTENCES"])
+shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 shouldUwU = (configuration["UWU_IFY"] == "True")
-shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 
+# STABLEDIFFUSION CONFIGURATION #
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
+
+### TEMPLATE CONFIGURATION ###
+strTemplateFunctionResultDescription = configuration["TEMPLATE_FUNCTION_RESULT_DESCRIPTION"]
+strTemplateFunctionResultSearchTermsDescription = configuration["TEMPLATE_FUNCTION_RESULT_SEARCH_TERMS_DESCRIPTION"]
+strTemplateFunctionResponseSystemPrompt = configuration["TEMPLATE_FUNCTION_RESULT_SYSTEM_PROMPT"]
+strTemplateChatCompletionSystemPrompt = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT"]
+strTemplateChatCompletionSystemPromptUwU = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT_UWU"]
 
 
 #################################################
@@ -298,9 +306,9 @@ commandMap = {
 
 def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False):
     if shouldUwU:
-        systemPrompt = templateChatCompletionSystemUwU
+        systemPrompt = strTemplateChatCompletionSystemPromptUwU
     else:
-        systemPrompt = templateChatCompletionSystem
+        systemPrompt = strTemplateChatCompletionSystemPrompt
     if shouldConsiderHistory:
         promptHistory = getPromptHistory()
     else:
@@ -350,7 +358,7 @@ def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False)
 availableFunctions = [
     {
         "name": "function_result",
-        "description": templateFunctionResponseDescription,
+        "description": strTemplateFunctionResultDescription,
         "parameters": {
             "type": "object",
             "properties": {
@@ -363,7 +371,7 @@ availableFunctions = [
                 },
                 "search_terms": {
                     "type": "string",
-                    "description": templateFunctionResponseSearchTerms,
+                    "description": strTemplateFunctionResultSearchTermsDescription,
                 },
             },
             "required": ["action", "search_terms"],
@@ -389,7 +397,7 @@ def getFunctionResponse(promptIn):
         promptHistory.append(
             {
                 "role": "system",
-                "content": templateFunctionResponseSystem,
+                "content": strTemplateFunctionResponseSystemPrompt,
             }
         )
         promptHistory.append(

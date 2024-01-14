@@ -157,9 +157,14 @@ def checkEmptyString(strIn):
 
 
 def killLlama():
+    hasResult = False
     for process in psutil.process_iter():
         if process.name() == "llama":
             process.kill()
             printDebug("llama has been killed off!")
+            hasResult = True
+    if not hasResult:
+        printError("Couldn't kill the llama process! Are you on the same machine as LocalAI?")
+        printError("(You can ignore this if llama hasn't been started yet.)")
     return
 
