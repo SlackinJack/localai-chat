@@ -78,6 +78,7 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
     websiteText = reader.summary()
     websiteText = re.sub('<[^<]+?>', '', websiteText)
     websiteText = cleanupString(websiteText)
+    printDump(websiteText)
     matchJS = 0
     for s in jsErrors:
         if s in websiteText:

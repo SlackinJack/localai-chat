@@ -23,7 +23,7 @@ listModels = []
 #################################################
 
 
-fileConfig = open("config.txt", "r")
+fileConfig = open("config.cfg", "r")
 fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
 initConfig(fileConfiguration)
@@ -92,18 +92,22 @@ def trigger_browse(promptIn):
     for s in promptIn.split(" "):
         if s.startswith("http"):
             websiteText = getInfoFromWebsite(s, True)
-            printDebug("Website text:\n" + websiteText)
-            writeConversation("DATA: " + websiteText)
-            getChatCompletion(promptIn.replace(s, ""))
+            printDump("Website text:\n" + websiteText)
+            if checkEmptyString(websiteText):
+                printError("The website is empty/blank!")
+                websiteText = "The text received from the website is blank and/or empty. Notify the user about this."
+            getChatCompletion(promptIn.replace(s, ""), websiteText, True)
     return
 
 
 def trigger_openFile(promptIn):
     filePath = getFilePathFromPrompt(promptIn)
     fileContents = getFileContents(filePath)
-    printDebug("File text:\n" + fileContents)
-    writeConversation("DATA: " + fileContents)
-    getChatCompletion(promptIn.replace(filePath, ""))
+    printDump("File text:\n" + fileContents)
+    if checkEmptyString(fileContents):
+        printError("The file is empty/blank!")
+        fileContents = "The text received from the file is blank and/or empty. Notify the user about this."
+    getChatCompletion(promptIn.replace(filePath, ""), fileContents, True)
     # TODO: non-local files
     return
 
@@ -147,7 +151,7 @@ def command_convo():
     if len(convoName) == 0:
         convoName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     setConversation(convoName)
-    printSuccess("Conversation set to: " + convoName)
+    printGreen("Conversation set to: " + convoName)
     return
 
 
@@ -168,7 +172,7 @@ def command_chat_model():
             return
     strModelChat = model
     printSeparator()
-    printSuccess("Chat model set to: " + model)
+    printGreen("Chat model set to: " + model)
     return
 
 
@@ -189,7 +193,7 @@ def command_comp_model():
             return
     strModelCompletion = model
     printSeparator()
-    printSuccess("Completion model set to: " + model)
+    printGreen("Completion model set to: " + model)
     return
 
 
@@ -201,7 +205,7 @@ def command_sd_model():
         model = strModelStableDiffusion
     strModelStableDiffusion = model
     printSeparator()
-    printSuccess("Stable Diffusion model set to: " + model)
+    printGreen("Stable Diffusion model set to: " + model)
     return
 
 
@@ -222,14 +226,14 @@ def command_offline():
 def command_online():
     global shouldUseInternet
     shouldUseInternet = True
-    printSuccess("Set to online mode!")
+    printGreen("Set to online mode!")
     return
 
 
 def command_historyon():
     global shouldConsiderHistory
     shouldConsiderHistory = True
-    printSuccess("Now using chat history in prompts!")
+    printGreen("Now using chat history in prompts!")
     return
 
 
@@ -287,7 +291,7 @@ commandMap = {
 }
 
 
-def getChatCompletion(userPromptIn):
+def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False):
     if shouldUwU:
         systemPrompt = templateChatCompletionSystemUwU
     else:
@@ -296,6 +300,13 @@ def getChatCompletion(userPromptIn):
         promptHistory = getPromptHistory()
     else:
         promptHistory = []
+    if len(dataIn) > 0:
+        promptHistory.append(
+            {
+                "role": "data",
+                "content": dataIn,
+            }
+        )
     promptHistory.append(
         {
             "role": "system",
@@ -308,6 +319,9 @@ def getChatCompletion(userPromptIn):
             "content": userPromptIn,
         }
     )
+    printDump("Current conversation:")
+    for obj in promptHistory:
+        printDump(str(obj))
     completion = openai.ChatCompletion.create(
         model = strModelChat,
         stream = True,
@@ -321,6 +335,8 @@ def getChatCompletion(userPromptIn):
             time.sleep(0.020)
             sys.stdout.flush()
             assistantResponse = assistantResponse + chunk.choices[0].delta.content
+    if len(dataIn) > 0 and shouldWriteDataToConvo:
+        writeConversation("DATA: " + dataIn)
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -359,6 +375,7 @@ def getFunctionResponse(promptIn):
     timesSearched = 0
     searchedTerms = []
     hrefs = []
+    dataCollection = {}
     while True:
         if shouldConsiderHistory:
             promptHistory = getPromptHistory()
@@ -384,6 +401,9 @@ def getFunctionResponse(promptIn):
                 "name": "function_result",
             },
         )
+        printDump("Current conversation:")
+        for obj in promptHistory:
+            printDump(str(obj))
         arguments = json.loads(completion.choices[0].message.function_call.arguments)
         printInfo("Next determined action is: " + arguments.get("action"))
         if arguments.get("action"):
@@ -402,7 +422,7 @@ def getFunctionResponse(promptIn):
                             for key, value in searchResults.items():
                                 if key not in hrefs:
                                     hrefs.append(key)
-                                    writeConversation("DATA: " + "(From " + key + ")" + value)
+                                    dataCollection[key] = value
                                 else:
                                     printDebug("Skipped duplicate source: " + key)
                         timesSearched += 1
@@ -416,11 +436,17 @@ def getFunctionResponse(promptIn):
                             printDebug("Looping back with search results.")
         else:
             printError("Function generation failed! Defaulting to chat generation.")
-    getChatCompletion(promptIn)
+            break
+    dataString = ""
+    for key, value in dataCollection.items():
+        dataString += "(From: " + key + ") " + value + "\n\n"
+    getChatCompletion(promptIn, dataString, False)
     if len(hrefs) > 0:
-        printSuccess("\n\n\nSources analyzed:\n")
+        printResponse("\n\n\nSources analyzed:\n")
         for h in hrefs:
-            printSuccess(h)
+            printResponse(h)
+    for key, value in dataCollection.items():
+        writeConversation("DATA: " + "(From " + key + ")" + value)
     return
 
 
