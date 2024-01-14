@@ -12,7 +12,7 @@ It will only be updated according to my needs, or adjusted to the environment I 
 Goals are only "nice to haves".*
 
 
-## Current features (may change at any point):
+## Current features:
 - Paste weblinks into the prompt and interact with just about any website that has text.
 - Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
 - Preliminal support for prompting on audio/video files.
@@ -22,14 +22,17 @@ Goals are only "nice to haves".*
 - Reply to conversations, load previous conversations or make new ones
 
 
-## Current dependencies (may change at any point):
+## Current dependencies:
 - check requirements
 
 
-## Road map and targets (mostly for myself):
-- (mid priority) file operations to-and-from server
-- (low priority) utils.py > splitBySentenceLenght > differentiate sentence period vs numerical decimals
+## Road map and targets:
+- (mid priority) send files to/from server
+- (low priority) utils.py > splitBySentenceLength > differentiate sentence period vs numerical decimals
 - (lowest priority) main.py > triggers > openFile > support other OS
+- (???) output files
+- (???) directly edit files
+- (???) some sort of GUI
 
 
 ## Test environment:

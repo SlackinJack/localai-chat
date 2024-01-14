@@ -12,8 +12,10 @@ from modules.search import *
 from modules.utils import *
 from templates import *
 
+
 # TODO:
 # add error-catch to completion requests
+
 
 listModels = []
 
@@ -29,8 +31,8 @@ fileConfig.close()
 initConfig(fileConfiguration)
 
 openai.api_base = configuration["ADDRESS"]
-openai.api_key = OPENAI_API_KEY = configuration["KEY"]
-os.environ["OPENAI_API_KEY"] = configuration["KEY"]
+openai.api_key = OPENAI_API_KEY = "sk-xxx"
+os.environ["OPENAI_API_KEY"] = "sk-xxx"
 
 intMaxSources = int(configuration["MAX_SOURCES"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
@@ -423,6 +425,7 @@ def getFunctionResponse(promptIn):
                                 if key not in hrefs:
                                     hrefs.append(key)
                                     dataCollection[key] = value
+                                    printDump("Appending search result: [" + key + "] " + value)
                                 else:
                                     printDebug("Skipped duplicate source: " + key)
                         timesSearched += 1
