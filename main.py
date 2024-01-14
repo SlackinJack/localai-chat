@@ -175,6 +175,7 @@ def command_chat_model():
     strModelChat = model
     printSeparator()
     printGreen("Chat model set to: " + model)
+    killLlama()
     return
 
 
@@ -196,6 +197,7 @@ def command_comp_model():
     strModelCompletion = model
     printSeparator()
     printGreen("Completion model set to: " + model)
+    killLlama()
     return
 
 
@@ -208,6 +210,7 @@ def command_sd_model():
     strModelStableDiffusion = model
     printSeparator()
     printGreen("Stable Diffusion model set to: " + model)
+    # TODO: kill stablediffusion if required ?
     return
 
 

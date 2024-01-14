@@ -1,4 +1,5 @@
 import os
+import psutil
 import random
 import re
 
@@ -153,4 +154,12 @@ def checkEmptyString(strIn):
         if s not in blanks:
             return False
     return True
+
+
+def killLlama():
+    for process in psutil.process_iter():
+        if process.name() == "llama":
+            process.kill()
+            printDebug("llama has been killed off!")
+    return
 

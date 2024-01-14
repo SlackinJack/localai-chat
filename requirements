@@ -7,4 +7,5 @@ docx2txt
 python-pptx
 SpeechRecognition
 pydub
+psutil
 
