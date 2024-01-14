@@ -2,6 +2,7 @@ import datetime
 import json
 import openai
 import os
+import psutil
 import re
 import time
 
@@ -310,6 +311,9 @@ def getChatCompletion(userPromptIn):
     for obj in promptHistory:
         printDump(str(obj))
     theModel = getModelResponse(userPromptIn)
+    for process in psutil.process_iter():
+        if process.name() == "llama":
+            process.kill()
     completion = openai.ChatCompletion.create(
         model = theModel,
         stream = True,
