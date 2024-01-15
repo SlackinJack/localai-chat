@@ -17,6 +17,7 @@ from modules.utils import *
 # kill llama every completion request
 
 
+lastModelUsed = ""
 listModels = []
 openai.api_key = OPENAI_API_KEY = "sk-xxx"
 os.environ["OPENAI_API_KEY"] = "sk-xxx"
@@ -305,6 +306,10 @@ commandMap = {
 
 
 def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False):
+    global lastModelUsed
+    if lastModelUsed != strModelChat:
+        lastModelUsed = strModelChat
+        killLlama()
     if shouldUwU:
         systemPrompt = strTemplateChatCompletionSystemPromptUwU
     else:
@@ -385,6 +390,10 @@ def function_result(action, search_terms):
 
 
 def getFunctionResponse(promptIn):
+    global lastModelUsed
+    if lastModelUsed != strModelCompletion:
+        lastModelUsed = strModelCompletion
+        killLlama()
     timesSearched = 0
     searchedTerms = []
     hrefs = []
@@ -465,6 +474,7 @@ def getFunctionResponse(promptIn):
 
 
 def getImageResponse(promptIn):
+    #TODO: kill stablediffusion if required?
     printInfo("Generating image with prompt: " + promptIn)
     completion = openai.Image.create(
         model = strModelStableDiffusion,
