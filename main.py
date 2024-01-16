@@ -14,11 +14,10 @@ from modules.utils import *
 
 # TODO:
 # add error-catch to completion requests
-# kill llama every completion request
+# command to print current settings
 
 
 lastModelUsed = ""
-listModels = []
 openai.api_key = OPENAI_API_KEY = "sk-xxx"
 os.environ["OPENAI_API_KEY"] = "sk-xxx"
 
@@ -33,10 +32,22 @@ fileConfiguration = (fileConfig.read()).split("\n")
 fileConfig.close()
 initConfig(fileConfiguration)
 
+
+####### MODELS LOADER #######
+fileModels = open("models.json", "r")
+fileModelsConfiguration = json.loads(fileModels.read())
+fileModels.close()
+modelsEnum = []
+modelsDescriptions = ""
+for obj in fileModelsConfiguration:
+    modelsEnum.append(obj["name"])
+    modelsDescriptions += obj["description"] + " "
+
+
 ##### MAIN CONFIGURATION #####
 openai.api_base = configuration["ADDRESS"]
-strModelChat = configuration["CHAT_MODEL"]
-strModelCompletion = configuration["COMPLETION_MODEL"]
+#strModelChat = configuration["CHAT_MODEL"]
+strModelDefault = configuration["DEFAULT_MODEL"]
 shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
@@ -57,6 +68,7 @@ strTemplateFunctionResultSearchTermsDescription = configuration["TEMPLATE_FUNCTI
 strTemplateFunctionResponseSystemPrompt = configuration["TEMPLATE_FUNCTION_RESULT_SYSTEM_PROMPT"]
 strTemplateChatCompletionSystemPrompt = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT"]
 strTemplateChatCompletionSystemPromptUwU = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT_UWU"]
+strTemplateModelCompletionSystemPrompt = configuration["TEMPLATE_MODEL_COMPLETION_SYSTEM_PROMPT"]
 
 
 #################################################
@@ -107,7 +119,7 @@ def trigger_browse(promptIn):
             if checkEmptyString(websiteText):
                 printError("The website is empty/blank!")
                 websiteText = "The text received from the website is blank and/or empty. Notify the user about this."
-            getChatCompletion(promptIn.replace(s, ""), websiteText, True)
+            getChatCompletionResponse(promptIn.replace(s, ""), websiteText, True)
     return
 
 
@@ -118,7 +130,7 @@ def trigger_openFile(promptIn):
     if checkEmptyString(fileContents):
         printError("The file is empty/blank!")
         fileContents = "The text received from the file is blank and/or empty. Notify the user about this."
-    getChatCompletion(promptIn.replace(filePath, ""), fileContents, True)
+    getChatCompletionResponse(promptIn.replace(filePath, ""), fileContents, True)
     # TODO: non-local files
     return
 
@@ -305,10 +317,67 @@ commandMap = {
 }
 
 
-def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False):
+#################################################
+############### BEGIN COMPLETIONS ###############
+#################################################
+
+
+def function_result(action, search_terms):
+    return
+
+
+def function_model(model):
+    return
+
+
+actionFunction = [
+    {
+        "name": "function_result",
+        "description": strTemplateFunctionResultDescription,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "REPLY_TO_CONVERSATION",
+                        "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
+                    ],
+                },
+                "search_terms": {
+                    "type": "string",
+                    "description": strTemplateFunctionResultSearchTermsDescription,
+                },
+            },
+            "required": ["action", "search_terms"],
+        },
+    },
+]
+
+
+modelFunction = [
+    {
+        "name": "function_model",
+        "description": "Given the descriptions of each assistant, determine the appropriate assistant that will respond to the user: " + modelsDescriptions,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "model": {
+                    "type": "string",
+                    "enum": modelsEnum,
+                },
+            },
+            "required": ["model"],
+        },
+    },
+]
+
+
+def getChatCompletionResponse(userPromptIn, dataIn = "", shouldWriteDataToConvo = False):
+    modelToUse = getModelResponse(userPromptIn, "chat completion response")
     global lastModelUsed
-    if lastModelUsed != strModelChat:
-        lastModelUsed = strModelChat
+    if lastModelUsed != modelToUse:
+        lastModelUsed = modelToUse
         killLlama()
     if shouldUwU:
         systemPrompt = strTemplateChatCompletionSystemPromptUwU
@@ -341,7 +410,7 @@ def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False)
     for obj in promptHistory:
         printDump(str(obj))
     completion = openai.ChatCompletion.create(
-        model = strModelChat,
+        model = modelToUse,
         stream = True,
         messages = promptHistory,
     )
@@ -360,39 +429,11 @@ def getChatCompletion(userPromptIn, dataIn = "", shouldWriteDataToConvo = False)
     return
 
 
-availableFunctions = [
-    {
-        "name": "function_result",
-        "description": strTemplateFunctionResultDescription,
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "REPLY_TO_CONVERSATION",
-                        "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
-                    ],
-                },
-                "search_terms": {
-                    "type": "string",
-                    "description": strTemplateFunctionResultSearchTermsDescription,
-                },
-            },
-            "required": ["action", "search_terms"],
-        },
-    },
-]
-
-
-def function_result(action, search_terms):
-    return
-
-
 def getFunctionResponse(promptIn):
+    modelToUse = getModelResponse(promptIn, "function completion response")
     global lastModelUsed
-    if lastModelUsed != strModelCompletion:
-        lastModelUsed = strModelCompletion
+    if lastModelUsed != modelToUse:
+        lastModelUsed = modelToUse
         killLlama()
     timesSearched = 0
     searchedTerms = []
@@ -416,9 +457,9 @@ def getFunctionResponse(promptIn):
             }
         )
         completion = openai.ChatCompletion.create(
-            model = strModelCompletion,
+            model = modelToUse,
             messages = promptHistory,
-            functions = availableFunctions,
+            functions = actionFunction,
             function_call = {
                 "name": "function_result",
             },
@@ -463,7 +504,7 @@ def getFunctionResponse(promptIn):
     dataString = ""
     for key, value in dataCollection.items():
         dataString += "(From: " + key + ") " + value + "\n\n"
-    getChatCompletion(promptIn, dataString, False)
+    getChatCompletionResponse(promptIn, dataString, False)
     if len(hrefs) > 0:
         printResponse("\n\n\nSources analyzed:\n")
         for h in hrefs:
@@ -491,6 +532,29 @@ def getImageResponse(promptIn):
     return "Your image is available at:\n\n" + completion.data[0].url
 
 
+def getModelResponse(promptIn, modelUsageIn):
+    global lastModelUsed
+    if lastModelUsed != strModelDefault:
+        lastModelUsed = strModelDefault
+        killLlama()
+    completion = openai.ChatCompletion.create(
+        model = strModelDefault,
+        messages = [
+            {
+                "role": "system",
+                "content": strTemplateModelCompletionSystemPrompt + promptIn,
+            },
+        ],
+        functions = modelFunction,
+        function_call = {
+            "name": "function_model",
+        },
+    )
+    theModel = json.loads(completion.choices[0].message.function_call.arguments).get("model")
+    printDebug("Determined model for " + modelUsageIn + ": " + theModel)
+    return theModel
+
+
 ##################################################
 ################### BEGIN CHAT ###################
 ##################################################
@@ -507,7 +571,7 @@ def handlePrompt(promptIn):
                 getFunctionResponse(promptIn)
             else:
                 printInfo("You have disabled automatic internet searching! Generating offline response.")
-                getChatCompletion(promptIn)
+                getChatCompletionResponse(promptIn)
     return
 
 
@@ -587,29 +651,6 @@ def getPromptHistory():
 ##################################################
 ################### BEGIN MAIN ###################
 ##################################################
-
-
-def detectModelsNew():
-    modelList = openai.Model.list()
-    for model in modelList["data"]:
-        modelName = model["id"]
-        if modelName not in strIgnoredModels:
-            listModels.append(modelName)
-    return
-
-
-detectModelsNew()
-
-
-if len(strModelChat) == 0:
-    strModelChat = listModels[0]
-if len(strModelCompletion) == 0:
-    strModelCompletion = listModels[0]
-printInfo("")
-printInfo("Current model settings:")
-printInfo("[CHAT] " + strModelChat)
-printInfo("[COMP] " + strModelCompletion)
-printInfo("[STDF] " + strModelStableDiffusion)
 
 
 while True:
