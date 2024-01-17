@@ -75,8 +75,9 @@ def getFileContents(filePath):
                 functionCall = entry
                 content = functionCall(filePath)
                 return cleanupString(content)
-    content = getFileText(filePath)
-    return cleanupString(content)
+    content = cleanupString(getFileText(filePath))
+    printDump(content)
+    return content
 
 
 def openLocalFile(filePath):

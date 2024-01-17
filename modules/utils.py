@@ -11,7 +11,7 @@ configuration = dict()
 
 def initConfig(fileConfiguration):
     for line in fileConfiguration:
-        if len(line) > 0 and not line.startswith("#"):
+        if len(line) > 0 and not line.startswith("#") and not checkEmptyString(line):
             key = line.split("=")[0]
             value = line.split("=")[1]
             configuration[key] = value

@@ -1,14 +1,14 @@
 [
     {
-        "name": "jordan-7b",
-        "description": "Jordan is an analytical assistant."
+        "name": "samantha",
+        "description": "Samantha is an assistant who is trained for philosophy, psychology, personal relationships."
     },
     {
-        "name": "samantha-7b",
-        "description": "Samantha is an assistant trained in philosophy, psychology, and personal relationships."
+        "name": "mistral",
+        "description": "Mistral is an assistant who is trained for programming, code and coding, software development."
     },
     {
-        "name": "mistral-code-7b",
-        "description": "Mistral is coding assistant, and excels at helping software developers and enthusiasts."
+        "name": "jordan",
+        "description": "Jordan is an assistant who is trained in text-analysis, and general knowledge."
     }
 ]
