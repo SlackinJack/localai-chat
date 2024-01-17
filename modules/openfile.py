@@ -1,9 +1,7 @@
 import docx2txt
 import os
-import speech_recognition
-import random
 import re
-import urllib
+import speech_recognition
 import subprocess
 import sys
 

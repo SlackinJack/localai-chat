@@ -2,7 +2,6 @@ import datetime
 import json
 import openai
 import os
-import re
 import time
 
 from pathlib import Path
@@ -56,7 +55,6 @@ shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
 intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
-strIgnoredModels = configuration["IGNORED_MODELS"]
 intMaxSources = int(configuration["MAX_SOURCES"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
@@ -165,7 +163,7 @@ def command_clear():
 
 def command_settings():
     printGeneric("Current Settings:\n")
-    printGeneric("Current model: " + strModelDefault)
+    printGeneric("Model: " + strModelDefault)
     if shouldConsiderHistory:
         printGeneric("[ON] Consider Chat History")
     else:
@@ -174,6 +172,8 @@ def command_settings():
         printGeneric("[ON] Auto Internet Search")
     else:
         printGeneric("[OFF] Auto Internet Search")
+    printGeneric("")
+    printGeneric("Current conversation file: " + strConvoName + ".convo")
     return
 
 
@@ -579,10 +579,6 @@ def checkTriggers(promptIn):
     return False
 
 
-def getResponse(promptIn):
-    return getReply(promptIn)
-
-
 def getPromptHistory():
     conversation = getConversation()
     promptHistoryStrings = []
@@ -636,20 +632,12 @@ def getPromptHistory():
 ##################################################
 
 
+printGeneric("")
+command_settings()
+printGeneric("")
+
+
 while True:
-    printInfo("")
-    printInfo("Current settings:")
-    if shouldUseInternet:
-        printInfo("[ON] Auto Internet Search")
-    else:
-        printInfo("[OFF] Auto Internet Search")
-    if shouldConsiderHistory:
-        printInfo("[ON] Consider Chat History")
-    else:
-        printInfo("[OFF] Consider Chat History")
-    printInfo("")
-    printInfo("Current conversation file: " + strConvoName + ".convo")
-    printInfo("")
     printSeparator()
     strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
     printSeparator()

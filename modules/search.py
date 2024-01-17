@@ -1,6 +1,5 @@
 import re
 import requests
-import signal
 import time
 
 from duckduckgo_search import DDGS
