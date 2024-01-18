@@ -164,14 +164,9 @@ def command_clear():
 def command_settings():
     printGeneric("Current Settings:\n")
     printGeneric("Model: " + strModelDefault)
-    if shouldConsiderHistory:
-        printGeneric("[ON] Consider Chat History")
-    else:
-        printGeneric("[OFF] Consider Chat History")
-    if shouldUseInternet:
-        printGeneric("[ON] Auto Internet Search")
-    else:
-        printGeneric("[OFF] Auto Internet Search")
+    printSetting(shouldUseInternet, "Auto Internet Search")
+    printSetting(shouldAutomaticallySwitchModels, "Automatically Switch Models")
+    printSetting(shouldConsiderHistory, "Consider Chat History")
     printGeneric("")
     printGeneric("Current conversation file: " + strConvoName + ".convo")
     return
@@ -249,13 +244,27 @@ def command_historyoff():
     return
 
 
+def command_switcheron():
+    global shouldAutomaticallySwitchModels
+    shouldAutomaticallySwitchModels = True
+    printGreen("Now automatically switching models!")
+    return
+
+
+def command_switcheroff():
+    global shouldAutomaticallySwitchModels
+    shouldAutomaticallySwitchModels = False
+    printRed("Not automatically switching models!")
+    return
+
+
 def command_help():
     printGeneric("Available commands:")
+    printGeneric(" - generate [prompt]")
     for entry, value in commandMap.items():
         commandName = value[0]
         if len(commandName) > 0:
             printGeneric(" - " + commandName)
-    printGeneric(" - generate [prompt]")
     printGeneric(" - exit / quit")
     return
 
@@ -269,11 +278,11 @@ commandMap = {
     command_clear: [
         "clear",
     ],
-    command_settings: [
-        "settings",
-    ],
     command_convo: [
         "convo",
+    ],
+    command_settings: [
+        "settings",
     ],
     command_model: [
         "model",
@@ -292,6 +301,12 @@ commandMap = {
     ],
     command_historyoff: [
         "historyoff",
+    ],
+    command_switcheron: [
+        "switcheron",
+    ],
+    command_switcheroff: [
+        "switcheroff",
     ],
 }
 

@@ -90,34 +90,49 @@ def printGeneric(string):
 
 def printGreen(string):
     print(colored(string, "light_green"))
+    return
 
 
 def printRed(string):
     print(colored(string, "light_red"))
+    return
 
 
 def printError(string):
     if int(configuration["DEBUG_LEVEL"]) >= 1:
         print(colored(string, "red"))
+    return
 
 
 def printInfo(string):
     if int(configuration["DEBUG_LEVEL"]) >= 2:
         print(colored(string, "yellow"))
+    return
 
 
 def printDebug(string):
     if int(configuration["DEBUG_LEVEL"]) >= 3:
         print(colored(string, "light_grey"))
+    return
 
 
 def printDump(string):
     if int(configuration["DEBUG_LEVEL"]) >= 4:
         print(colored(string, "dark_grey"))
+    return
 
 
 def printSeparator():
     printGeneric("-------------------------------------------------------------")
+    return
+
+
+def printSetting(isEnabled, descriptionIn):
+    if isEnabled:
+        printGeneric("[ON] " + descriptionIn)
+    else:
+        printGeneric("[OFF] " + descriptionIn)
+    return
 
 
 def cleanupString(stringIn):
