@@ -12,8 +12,6 @@ from modules.utils import *
 
 
 # TODO:
-# add error-catch to completion requests
-# command to print current settings
 # split input file first then prompt after
 # openfile trigger -> upload files to server, then parse from server
 # add back autocomplete for model command
@@ -67,7 +65,6 @@ strImageSize = configuration["IMAGE_SIZE"]
 
 
 ### TEMPLATE CONFIGURATION ###
-strTemplateFunctionResultDescription = configuration["TEMPLATE_FUNCTION_RESULT_DESCRIPTION"]
 strTemplateFunctionResultSearchTermsDescription = configuration["TEMPLATE_FUNCTION_RESULT_SEARCH_TERMS_DESCRIPTION"]
 strTemplateFunctionResponseSystemPrompt = configuration["TEMPLATE_FUNCTION_RESULT_SYSTEM_PROMPT"]
 strTemplateChatCompletionSystemPrompt = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT"]
@@ -115,13 +112,17 @@ setConversation(strConvoTimestamp)
 ##################################################
 
 
+def errorBlankEmptyText(sourceIn):
+    printError("The " + sourceIn + " is empty/blank!")
+    return "The text received from the " + sourceIn + " is blank and/or empty. Notify the user about this."
+
+
 def trigger_browse(promptIn):
     for s in promptIn.split(" "):
         if s.startswith("http"):
             websiteText = getInfoFromWebsite(s, True)
             if checkEmptyString(websiteText):
-                printError("The website is empty/blank!")
-                websiteText = "The text received from the website is blank and/or empty. Notify the user about this."
+                websiteText = errorBlankEmptyText("website")
             getChatCompletionResponse(promptIn.replace(s, ""), websiteText, True)
     return
 
@@ -130,8 +131,7 @@ def trigger_openFile(promptIn):
     filePath = getFilePathFromPrompt(promptIn)
     fileContents = getFileContents(filePath)
     if checkEmptyString(fileContents):
-        printError("The file is empty/blank!")
-        fileContents = "The text received from the file is blank and/or empty. Notify the user about this."
+        fileContents = errorBlankEmptyText("file")
     getChatCompletionResponse(promptIn.replace(filePath, ""), fileContents, True)
     return
 
@@ -324,7 +324,7 @@ def function_model(assistant_name):
     return
 
 
-def getChatCompletionResponse(userPromptIn, dataIn = "", shouldWriteDataToConvo = False):
+def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo = False):
     modelToUse = getModelResponse(userPromptIn)
     global lastModelUsed
     if lastModelUsed != modelToUse:
@@ -339,12 +339,13 @@ def getChatCompletionResponse(userPromptIn, dataIn = "", shouldWriteDataToConvo 
     else:
         promptHistory = []
     if len(dataIn) > 0:
-        promptHistory.append(
-            {
-                "role": "data",
-                "content": dataIn,
-            }
-        )
+        for data in dataIn:
+            promptHistory.append(
+                {
+                    "role": "data",
+                    "content": data,
+                }
+            )
     promptHistory.append(
         {
             "role": "system",
@@ -360,11 +361,24 @@ def getChatCompletionResponse(userPromptIn, dataIn = "", shouldWriteDataToConvo 
     printDump("Current conversation:")
     for obj in promptHistory:
         printDump(str(obj))
-    completion = openai.ChatCompletion.create(
-        model = modelToUse,
-        stream = True,
-        messages = promptHistory,
-    )
+    failedCompletions = 0
+    while True:
+        try:
+            completion = openai.ChatCompletion.create(
+                model = modelToUse,
+                stream = True,
+                messages = promptHistory,
+            )
+            break
+        except Exception as e:
+            if failedCompletions < 3:
+                printError("Failed to create completion! Trying again...")
+                printError(str(e))
+                time.sleep(3)
+            else:
+                printError("Failed to create completion after 3 tries!")
+                printError(str(e))
+                return
     assistantResponse = ""
     for chunk in completion:
         if chunk.choices[0].delta.content is not None:
@@ -388,6 +402,7 @@ def getFunctionResponse(promptIn):
     searchedTerms = []
     hrefs = []
     dataCollection = {}
+    tries = 0
     while True:
         if shouldConsiderHistory:
             promptHistory = getPromptHistory()
@@ -405,77 +420,97 @@ def getFunctionResponse(promptIn):
                 "content": promptIn,
             }
         )
-        completion = openai.ChatCompletion.create(
-            model = strModelDefault,
-            messages = promptHistory,
-            functions = [
-                {
-                    "name": "function_result",
-                    "description": strTemplateFunctionResultDescription,
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "action": {
-                                "type": "string",
-                                "enum": [
-                                    "REPLY_TO_CONVERSATION",
-                                    "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
-                                ],
-                            },
-                            "search_terms": {
-                                "type": "string",
-                                "description": strTemplateFunctionResultSearchTermsDescription,
+        failedCompletions = 0
+        while True:
+            try:
+                completion = openai.ChatCompletion.create(
+                    model = strModelDefault,
+                    messages = promptHistory,
+                    functions = [
+                        {
+                            "name": "function_result",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "enum": [
+                                            "REPLY_TO_CONVERSATION",
+                                            "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
+                                        ],
+                                    },
+                                    "search_terms": {
+                                        "type": "string",
+                                        "description": strTemplateFunctionResultSearchTermsDescription,
+                                    },
+                                },
+                                "required": ["action", "search_terms"],
                             },
                         },
-                        "required": ["action", "search_terms"],
+                    ],
+                    function_call = {
+                        "name": "function_result",
                     },
-                },
-            ],
-            function_call = {
-                "name": "function_result",
-            },
-        )
+                )
+                break
+            except Exception as e:
+                if failedCompletions < 3:
+                    printError("Failed to create completion! Trying again...")
+                    printError(str(e))
+                    time.sleep(3)
+                else:
+                    printError("Failed to create completion after 3 tries!")
+                    printError(str(e))
+                    return
         printDump("Current conversation:")
         for obj in promptHistory:
             printDump(str(obj))
         arguments = json.loads(completion.choices[0].message.function_call.arguments)
-        printInfo("Next determined action is: " + arguments.get("action"))
-        if arguments.get("action"):
-            match arguments.get("action"):
-                case "REPLY_TO_CONVERSATION":
+        if arguments is not None and arguments.get("action") is not None:
+            printInfo("Next determined action is: " + arguments.get("action"))
+            if arguments.get("action") in "REPLY_TO_CONVERSATION":
+                break
+            elif arguments.get("action") in "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION":
+                currentSearchString = arguments.get("search_terms")
+                if currentSearchString in searchedTerms:
+                    printError("Duplicated previous search terms! Breaking out of loop.")
                     break
-                case "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION":
-                    currentSearchString = arguments.get("search_terms")
-                    if currentSearchString in searchedTerms:
-                        printError("Duplicated previous search terms! Breaking out of loop.")
+                else:
+                    searchedTerms.append(currentSearchString)
+                    searchResults = getSearchResponse(currentSearchString, intMaxSources, intMaxSentences)
+                    if len(searchResults) > 0:
+                        for key, value in searchResults.items():
+                            if key not in hrefs:
+                                hrefs.append(key)
+                                dataCollection[key] = value
+                                printDump("Appending search result: [" + key + "] " + value)
+                            else:
+                                printDebug("Skipped duplicate source: " + key)
+                    timesSearched += 1
+                    if not shouldLoopbackSearch:
+                        printInfo("You have search loopback disabled. Breaking out of loop.")
+                        break
+                    elif timesSearched >= intMaxLoopbackIterations:
+                        printInfo("Maximum number of searches reached! Breaking out of loop.")
                         break
                     else:
-                        searchedTerms.append(currentSearchString)
-                        searchResults = getSearchResponse(currentSearchString, intMaxSources, intMaxSentences)
-                        if len(searchResults) > 0:
-                            for key, value in searchResults.items():
-                                if key not in hrefs:
-                                    hrefs.append(key)
-                                    dataCollection[key] = value
-                                    printDump("Appending search result: [" + key + "] " + value)
-                                else:
-                                    printDebug("Skipped duplicate source: " + key)
-                        timesSearched += 1
-                        if not shouldLoopbackSearch:
-                            printInfo("You have search loopback disabled. Breaking out of loop.")
-                            break
-                        elif timesSearched >= intMaxLoopbackIterations:
-                            printInfo("Maximum number of searches reached! Breaking out of loop.")
-                            break
-                        else:
-                            printDebug("Looping back with search results.")
+                        printDebug("Looping back with search results.")
+            else:
+                printError("This action is invalid/unsupported! Breaking out of loop.")
+                break
+            tries = 0
         else:
-            printError("Function generation failed! Defaulting to chat generation.")
-            break
-    dataString = ""
+            if tries < 3:
+                printError("Function generation failed! Trying again...")
+                tries += 1
+                time.sleep(3)
+            else:
+                printError("Function generation failed after 3 attempts! Defaulting to chat generation.")
+                break
+    data = []
     for key, value in dataCollection.items():
-        dataString += "(From: " + key + ") " + value + "\n\n"
-    getChatCompletionResponse(promptIn, dataString, False)
+        data.append(value)
+    getChatCompletionResponse(promptIn, data, False)
     if len(hrefs) > 0:
         printResponse("\n\n\nSources analyzed:\n")
         for h in hrefs:
@@ -488,11 +523,24 @@ def getFunctionResponse(promptIn):
 def getImageResponse(promptIn):
     #TODO: kill stablediffusion if required?
     printInfo("Generating image with prompt: " + promptIn)
-    completion = openai.Image.create(
-        model = strModelStableDiffusion,
-        prompt = promptIn,
-        size = strImageSize,
-    )
+    failedCompletions = 0
+    while True:
+        try:
+            completion = openai.Image.create(
+                model = strModelStableDiffusion,
+                prompt = promptIn,
+                size = strImageSize,
+            )
+            break
+        except Exception as e:
+            if failedCompletions < 3:
+                printError("Failed to create completion! Trying again...")
+                printError(str(e))
+                time.sleep(3)
+            else:
+                printError("Failed to create completion after 3 tries!")
+                printError(str(e))
+                return
     theURL = completion.data[0].url
     split = theURL.split("/")
     filename = split[len(split) - 1]
@@ -543,11 +591,24 @@ def getModelResponse(promptIn):
         for obj in promptMessage:
             printDump(str(obj))
         printDump("Choices: " + grammarStringBuilder)
-        completion = openai.ChatCompletion.create(
-            model = strModelDefault,
-            messages = promptMessage,
-            grammar = grammarStringBuilder
-        )
+        failedCompletions = 0
+        while True:
+            try:
+                completion = openai.ChatCompletion.create(
+                    model = strModelDefault,
+                    messages = promptMessage,
+                    grammar = grammarStringBuilder
+                )
+                break
+            except Exception as e:
+                if failedCompletions < 3:
+                    printError("Failed to create completion! Trying again...")
+                    printError(str(e))
+                    time.sleep(3)
+                else:
+                    printError("Failed to create completion after 3 tries!")
+                    printError(str(e))
+                    return
         model = completion.choices[0].message.content
         printDebug("Determined model: " + model)
         return model

@@ -2,6 +2,7 @@ import os
 import psutil
 import random
 import re
+import time
 
 from termcolor import colored
 
@@ -178,6 +179,7 @@ def killLlama():
             process.kill()
             printDebug("llama has been killed off!")
             hasResult = True
+            time.sleep(1)
     if not hasResult:
         printError("Couldn't kill the llama process! Are you on the same machine as LocalAI?")
         printError("(You can ignore this if llama hasn't been started yet.)")
