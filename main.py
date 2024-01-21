@@ -123,7 +123,7 @@ def trigger_browse(promptIn):
             websiteText = getInfoFromWebsite(s, True)
             if checkEmptyString(websiteText):
                 websiteText = errorBlankEmptyText("website")
-            getChatCompletionResponse(promptIn.replace(s, ""), websiteText, True)
+            getChatCompletionResponse(promptIn.replace(s, ""), [websiteText], True)
     return
 
 
@@ -132,7 +132,7 @@ def trigger_openFile(promptIn):
     fileContents = getFileContents(filePath)
     if checkEmptyString(fileContents):
         fileContents = errorBlankEmptyText("file")
-    getChatCompletionResponse(promptIn.replace(filePath, ""), fileContents, True)
+    getChatCompletionResponse(promptIn.replace(filePath, ""), [fileContents], True)
     return
 
 
