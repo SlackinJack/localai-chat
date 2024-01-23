@@ -14,7 +14,6 @@ from modules.utils import *
 # TODO:
 # split input file first then prompt after
 # openfile trigger -> upload files to server, then parse from server
-# add back autocomplete for model command
 
 
 lastModelUsed = ""
@@ -38,11 +37,13 @@ initConfig(fileConfiguration)
 fileModels = open("models.json", "r")
 fileModelsConfiguration = json.loads(fileModels.read())
 fileModels.close()
-modelsEnum = []
 modelsDescriptions = ""
-for obj in fileModelsConfiguration:
-    modelsEnum.append(obj["name"])
-    modelsDescriptions += obj["description"] + "\n"
+modelsPrompts = {}
+modelsEnabled = {}
+for modelObj in fileModelsConfiguration:
+    modelsDescriptions += modelObj["description"] + "\n"
+    modelsPrompts[modelObj["name"]] = modelObj["prompt"]
+    modelsEnabled[modelObj["name"]] = modelObj["isSwitchable"]
 
 
 ##### MAIN CONFIGURATION #####
@@ -56,7 +57,6 @@ intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
 intMaxSources = int(configuration["MAX_SOURCES"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
-shouldUwU = (configuration["UWU_IFY"] == "True")
 
 
 # STABLEDIFFUSION CONFIGURATION #
@@ -67,8 +67,6 @@ strImageSize = configuration["IMAGE_SIZE"]
 ### TEMPLATE CONFIGURATION ###
 strTemplateFunctionResultSearchTermsDescription = configuration["TEMPLATE_FUNCTION_RESULT_SEARCH_TERMS_DESCRIPTION"]
 strTemplateFunctionResponseSystemPrompt = configuration["TEMPLATE_FUNCTION_RESULT_SYSTEM_PROMPT"]
-strTemplateChatCompletionSystemPrompt = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT"]
-strTemplateChatCompletionSystemPromptUwU = configuration["TEMPLATE_CHAT_COMPLETION_SYSTEM_PROMPT_UWU"]
 strTemplateModelSystemPrompt = configuration["TEMPLATE_MODEL_SYSTEM_PROMPT"]
 
 
@@ -192,9 +190,23 @@ def command_convo():
 
 def command_model():
     global strModelDefault
-    model = printInput("Select the default model (leave empty for current '" + strModelDefault + "'): ")
+    printGeneric("Available models:")
+    for m in modelsEnum:
+        printGeneric(m)
+    printSeparator()
+    model = printInput("Select a model (leave empty for current '" + strModelDefault + "'): ")
     if len(model) == 0:
         model = strModelDefault
+    else:
+        matched = False
+        for m in modelsEnum:
+            if model in m or model == m:
+                model = m
+                matched = True
+                break
+        if not matched:
+            printRed("Can't find a match! Using current model " + strModelDefault)
+            model = strModelDefault
     if lastModelUsed != model:
         killLlama()
     strModelDefault = model
@@ -330,10 +342,6 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     if lastModelUsed != modelToUse:
         lastModelUsed = modelToUse
         killLlama()
-    if shouldUwU:
-        systemPrompt = strTemplateChatCompletionSystemPromptUwU
-    else:
-        systemPrompt = strTemplateChatCompletionSystemPrompt
     if shouldConsiderHistory:
         promptHistory = getPromptHistory()
     else:
@@ -349,7 +357,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     promptHistory.append(
         {
             "role": "system",
-            "content": systemPrompt,
+            "content": modelsPrompts[modelToUse],
         }
     )
     promptHistory.append(
@@ -382,7 +390,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     assistantResponse = ""
     for chunk in completion:
         if chunk.choices[0].delta.content is not None:
-            printResponse(chunk.choices[0].delta.content, "", modifier = shouldUwU)
+            printResponse(chunk.choices[0].delta.content, "")
             time.sleep(0.020)
             sys.stdout.flush()
             assistantResponse = assistantResponse + chunk.choices[0].delta.content
@@ -560,15 +568,15 @@ def getModelResponse(promptIn):
         return strModelDefault
     else:
         grammarStringBuilder = "root ::= ("
-        i = 0
-        while i < len(modelsEnum) - 1:
-            modelName = modelsEnum[i]
-            printDump("Adding model to grammar: " + modelName)
-            grammarStringBuilder += "\"" + modelName + "\" | "
-            i += 1
-        lastModel = modelsEnum[len(modelsEnum) - 1]
-        printDump("Adding model to grammar: " + lastModel)
-        grammarStringBuilder += "\"" + lastModel + "\")"
+        for model, enabled in modelsEnabled.items():
+            if len(grammarStringBuilder) > 10:
+                grammarStringBuilder += " | "
+            if enabled:
+                printDebug("Adding model to grammar: " + model)
+                grammarStringBuilder += "\"" + model + "\""
+            else:
+                printDebug("Skipping model: " + model)
+        grammarStringBuilder += ")"
         promptMessage = []
         promptMessage.append(
             {
