@@ -19,7 +19,7 @@ Goals are only "nice to haves".
 
 ## Current features:
 - Paste weblinks into the prompt and interact with just about any website that has text.
-- Transcribe YouTube videos and prompt on the content.
+- Get transcripts from YouTube videos, and prompt on the content.
 - Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
 - Basic support for prompting on audio/video files.
 - Search duckduckgo based on generated search terms from your prompt, then answer your prompt based on what it found. (With sources!)

@@ -697,9 +697,12 @@ def checkTriggers(promptIn):
                 if percentage > targetPercentage:
                     triggerToCall = trigger
                     targetPercentage = percentage
-        printDebug("Calling trigger: " + str(triggerToCall))
-        triggerToCall(promptIn)
-        return True
+        if triggerToCall is None:
+            return False
+        else:
+            printDebug("Calling trigger: " + str(triggerToCall))
+            triggerToCall(promptIn)
+            return True
     printDebug("No triggers detected.")
     return False
 
