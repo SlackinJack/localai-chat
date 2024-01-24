@@ -2,13 +2,17 @@
 
 **Working: enough for me**
 
+
 Very barebones & basic front-end for LocalAI written in Python3
 
 
 *Please Note:
 This was created explicitly for specific personal tasks that I myself am too lazy to do.
+
 As such, it should only be treated as a patch-job/passion project.
-It will only be updated according to my needs, or adjusted to the environment I am using this in.
+
+(For now) it will only be updated according to my needs, and adjusted to the environment I am using this in.
+
 Goals are only "nice to haves".*
 
 
@@ -27,8 +31,6 @@ Goals are only "nice to haves".*
 
 
 ## Road map and targets:
-- (mid priority) send files to/from server
-- (low priority) utils.py > splitBySentenceLength > differentiate sentence period vs numerical decimals
 - (lowest priority) main.py > triggers > openFile > support other OS
 - (???) output files
 - (???) directly edit files
