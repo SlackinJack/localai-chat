@@ -4,6 +4,7 @@ import openai
 import os
 import time
 
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from modules.openfile import *
@@ -115,6 +116,20 @@ def errorBlankEmptyText(sourceIn):
     return "The text received from the " + sourceIn + " is blank and/or empty. Notify the user about this."
 
 
+def trigger_youtube(promptIn):
+    link = ""
+    ytId = ""
+    for s in promptIn.split(" "):
+        for linkFormat in triggerMap[trigger_youtube]:
+            if s.startswith(linkFormat):
+                link = s
+                ytId = link.replace(linkFormat, "")
+                break
+    captions = getYouTubeCaptions(ytId)
+    getChatCompletionResponse(promptIn.replace(link, ""), [captions], True)
+    return
+
+
 def trigger_browse(promptIn):
     for s in promptIn.split(" "):
         if s.startswith("http"):
@@ -135,6 +150,12 @@ def trigger_openFile(promptIn):
 
 
 triggerMap = {
+    trigger_youtube: [
+    "https://www.youtu.be/",
+    "https://youtu.be/",
+    "https://www.youtube.com/watch?v=",
+    "https://youtube.com/watch?v="
+    ],
     trigger_browse: [
     "http://",
     "https://"
@@ -395,7 +416,8 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
             sys.stdout.flush()
             assistantResponse = assistantResponse + chunk.choices[0].delta.content
     if len(dataIn) > 0 and shouldWriteDataToConvo:
-        writeConversation("DATA: " + dataIn)
+        for entry in dataIn:
+            writeConversation("DATA: " + entry)
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -653,12 +675,31 @@ def checkCommands(promptIn):
 
 
 def checkTriggers(promptIn):
+    potentialTriggers = {}
     for key, value in triggerMap.items():
         for v in value:
             if v in promptIn:
-                printDebug("Calling trigger: " + str(key))
-                key(promptIn)
-                return True
+                matchPercentage = SequenceMatcher(None, v, promptIn).ratio() * 100
+                potentialTriggers[key] = matchPercentage
+    if len(potentialTriggers) == 1:
+        for key, value in potentialTriggers.items():
+            printDebug("Calling trigger: " + str(key))
+            key(promptIn)
+            return True
+    else:
+        triggerToCall = None
+        targetPercentage = 0
+        for trigger, percentage in potentialTriggers.items():
+            if triggerToCall == None:
+                triggerToCall = trigger
+                targetPercentage = percentage
+            else:
+                if percentage > targetPercentage:
+                    triggerToCall = trigger
+                    targetPercentage = percentage
+        printDebug("Calling trigger: " + str(triggerToCall))
+        triggerToCall(promptIn)
+        return True
     printDebug("No triggers detected.")
     return False
 

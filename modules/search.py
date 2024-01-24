@@ -4,6 +4,7 @@ import time
 
 from duckduckgo_search import DDGS
 from readability import Document
+from youtube_transcript_api import YouTubeTranscriptApi
 
 from modules.utils import *
 
@@ -93,4 +94,28 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
         return trimTextBySentenceLength(websiteText, maxSentences)
     else:
         return websiteText
+
+
+def getYouTubeCaptions(videoIdIn):
+    try:
+        captionStringBuilder = ""
+        defaultLanguageCode = "en"
+        printDebug("Video ID: " + videoIdIn)
+        srt = YouTubeTranscriptApi.get_transcript(videoIdIn, languages=[defaultLanguageCode])
+        if YouTubeTranscriptApi.list_transcripts(videoIdIn).find_transcript([defaultLanguageCode]).is_generated:
+            printInfo("Heads up! It seems like this transcript is auto-generated - it may not be 100% correct!")
+        for s in srt:
+            for key, value in s.items():
+                if key == "text":
+                    captionStringBuilder += value + " "
+        printDump("Video captions: " + captionStringBuilder)
+        return captionStringBuilder
+    except Exception as e:
+        disabledText = "Subtitles are disabled for this video"
+        if disabledText in str(e):
+            printError(disabledText + "!")
+            return disabledText + "!"
+        else:
+            printError(str(e))
+            return "An error occured while obtaining the captions for this video!"
 

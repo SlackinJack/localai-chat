@@ -89,7 +89,7 @@ def printSetting(isEnabled, descriptionIn):
 
 
 def cleanupString(stringIn):
-    out = stringIn.replace("\n", " ").replace("\r", " ")          # remove all newlines
+    out = stringIn.replace("\n", " ").replace("\r", " ")         # remove all newlines
     out = ' '.join(out.split())                                  # remove all redundant spaces
     out = (out.encode("ascii", errors="ignore")).decode()        # drop all non-ascii chars
     return out

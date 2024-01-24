@@ -19,12 +19,13 @@ Goals are only "nice to haves".
 
 ## Current features:
 - Paste weblinks into the prompt and interact with just about any website that has text.
+- Transcribe YouTube videos and prompt on the content.
 - Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
-- Preliminal support for prompting on audio/video files.
+- Basic support for prompting on audio/video files.
 - Search duckduckgo based on generated search terms from your prompt, then answer your prompt based on what it found. (With sources!)
-- Autodetect, and change models on-the-fly
-- Text-streaming
-- Reply to conversations, load previous conversations or make new ones
+- Auto-switch models on-the-fly
+- Text-streaming for outputs
+- Reply to conversations, load previous conversations and continue them
 
 
 ## Current dependencies:

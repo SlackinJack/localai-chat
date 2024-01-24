@@ -86,3 +86,4 @@ def openLocalFile(filePath):
         if sys.platform == "darwin":
             opener = "open"
         subprocess.call([opener, filePath])
+
