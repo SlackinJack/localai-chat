@@ -58,6 +58,8 @@ jsErrors = [
 
 blockedErrors = [
         "Access Denied",
+        "Access forbidden",
+        "Please contact the site",
         "You don't have permission to access",
         "403 - Forbidden", "Access to this page is forbidden",
         "Why have I been blocked?",

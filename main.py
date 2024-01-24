@@ -13,8 +13,7 @@ from modules.utils import *
 
 
 # TODO:
-# split input file first then prompt after
-# openfile trigger -> upload files to server, then parse from server
+# - split long input files then prompt after
 
 
 lastModelUsed = ""

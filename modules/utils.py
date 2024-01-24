@@ -100,27 +100,27 @@ def getFilePathFromPrompt(stringIn):
 
 
 def trimTextBySentenceLength(textIn, maxLength):
-    i = 0 # char position
-    j = 0 # sentences
-    k = 0 # chars since last sentence
+    i = 0               # char position
+    j = 0               # sentences
+    k = 0               # chars since last sentence
+    flag = False        # deleted a "short" sentence this run
     for char in textIn:
         i += 1
         k += 1
-        if "!" == char or "?" == char:
+        if ("!" == char or 
+            "?" == char or 
+            "." == char and 
+                (not textIn[i - 1].isnumeric() or 
+                (i + 1 <= len(textIn) - 1 and not textIn[i + 1].isnumeric()))
+            ):
             j += 1
-            if k < 32:
+            if k < 24 and not flag:
                 j -= 1
+                flag = True
             if j == maxLength:
                 return textIn[0:i]
             k = 0
-        elif "." == char:
-            if (textIn[i - 1].isnumeric()) or (i + 1 <= len(textIn) - 1 and textIn[i + 1].isnumeric()):
-                j += 1
-                if k < 32:
-                    j -= 1
-                if j == maxLength:
-                    return textIn[0:i]
-                k = 0
+            flag = False
     return textIn
 
 
