@@ -106,13 +106,21 @@ def trimTextBySentenceLength(textIn, maxLength):
     for char in textIn:
         i += 1
         k += 1
-        if "." == char or "!" == char or "?" == char:
+        if "!" == char or "?" == char:
             j += 1
             if k < 32:
                 j -= 1
             if j == maxLength:
                 return textIn[0:i]
             k = 0
+        elif "." == char:
+            if (textIn[i - 1].isnumeric()) or (i + 1 <= len(textIn) - 1 and textIn[i + 1].isnumeric()):
+                j += 1
+                if k < 32:
+                    j -= 1
+                if j == maxLength:
+                    return textIn[0:i]
+                k = 0
     return textIn
 
 

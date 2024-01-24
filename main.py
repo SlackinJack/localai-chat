@@ -191,17 +191,17 @@ def command_convo():
 def command_model():
     global strModelDefault
     printGeneric("Available models:")
-    for m in modelsEnum:
-        printGeneric(m)
+    for name, prompt in modelsPrompts.items():
+        printGeneric(name)
     printSeparator()
     model = printInput("Select a model (leave empty for current '" + strModelDefault + "'): ")
     if len(model) == 0:
         model = strModelDefault
     else:
         matched = False
-        for m in modelsEnum:
-            if model in m or model == m:
-                model = m
+        for name, prompt in modelsPrompts.items():
+            if model in name or model == name:
+                model = name
                 matched = True
                 break
         if not matched:
