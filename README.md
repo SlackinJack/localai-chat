@@ -6,14 +6,15 @@
 Very barebones & basic front-end for LocalAI written in Python3
 
 
-*Please Note:
+*Please Note:*
+
 This was created explicitly for specific personal tasks that I myself am too lazy to do.
 
 As such, it should only be treated as a patch-job/passion project.
 
 (For now) it will only be updated according to my needs, and adjusted to the environment I am using this in.
 
-Goals are only "nice to haves".*
+Goals are only "nice to haves".
 
 
 ## Current features:
@@ -42,6 +43,10 @@ Goals are only "nice to haves".*
 - NVidia Quadro P2000 5GB, Cuda 12.3
 - 2x Xeon X5650
 - Python 3.10
-- Model(s): uncensored-jordan-7b.Q4_K_S, mistral-7b-instruct-v0.2-code-ft.Q4_K_S, Samantha-1.11-7b-ggml-model-q4_0
-- LocalAI 1.40.0 (main), LocalAI 2.5.1
+- Model(s):
+    - CatPPT-base-Q2_K
+    - uncensored-jordan-7b.Q4_K_S
+    - mistral-7b-instruct-v0.2-code-ft.Q4_K_S
+    - Samantha-1.11-7b-ggml-model-q4_0
+- LocalAI 1.40.0 (main), LocalAI 2.5.1 (occasionally tested)
 
