@@ -8,9 +8,7 @@ Very barebones & basic front-end for LocalAI written in Python3
 
 *Please Note:*
 
-This was created explicitly for specific personal tasks that I myself am too lazy to do.
-
-As such, it should only be treated as a patch-job/passion project.
+This was created for specific personal tasks.
 
 (For now) it will only be updated according to my needs, and adjusted to the environment I am using this in.
 
@@ -32,11 +30,15 @@ Goals are only "nice to haves".
 - check requirements
 
 
+## Setup:
+- You will need to make an additional role called "data" in your model configurations.
+- Use a completion chat template for your models.
+
+
 ## Road map and targets:
-- (lowest priority) main.py > triggers > openFile > support other OS
 - (???) output files
 - (???) directly edit files
-- (???) some sort of GUI
+- (lowest priority) main.py > triggers > openFile > support other OS
 
 
 ## Test environment:

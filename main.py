@@ -41,9 +41,10 @@ modelsDescriptions = ""
 modelsPrompts = {}
 modelsEnabled = {}
 for modelObj in fileModelsConfiguration:
-    modelsDescriptions += modelObj["description"] + "\n"
     modelsPrompts[modelObj["name"]] = modelObj["prompt"]
     modelsEnabled[modelObj["name"]] = modelObj["isSwitchable"]
+    if len(modelObj["description"]) > 0:
+        modelsDescriptions += modelObj["description"] + "\n"
 
 
 ##### MAIN CONFIGURATION #####
@@ -358,6 +359,8 @@ def function_model(assistant_name):
 
 def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo = False):
     modelToUse = getModelResponse(userPromptIn)
+    if modelToUse is None:
+        modelToUse = strModelDefault
     global lastModelUsed
     if lastModelUsed != modelToUse:
         lastModelUsed = modelToUse
@@ -590,10 +593,9 @@ def getModelResponse(promptIn):
     else:
         grammarStringBuilder = "root ::= ("
         for model, enabled in modelsEnabled.items():
-            if len(grammarStringBuilder) > 10:
-                grammarStringBuilder += " | "
             if enabled:
-                printDebug("Adding model to grammar: " + model)
+                if len(grammarStringBuilder) > 10:
+                    grammarStringBuilder += " | "
                 grammarStringBuilder += "\"" + model + "\""
             else:
                 printDebug("Skipping model: " + model)
@@ -639,8 +641,11 @@ def getModelResponse(promptIn):
                     printError(str(e))
                     return
         model = completion.choices[0].message.content
-        printDebug("Determined model: " + model)
-        return model
+        for modelName, prompt in modelsPrompts.items():
+            if model in modelName or model == modelName:
+                printDebug("Determined model: " + modelName)
+                return modelName
+        return None
 
 
 ##################################################
