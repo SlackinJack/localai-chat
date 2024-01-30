@@ -137,6 +137,7 @@ def trigger_browse(promptIn):
             if checkEmptyString(websiteText):
                 websiteText = errorBlankEmptyText("website")
             getChatCompletionResponse(promptIn.replace(s, ""), [websiteText], True)
+            break
     return
 
 
@@ -764,7 +765,7 @@ def getPromptHistory():
 ##################################################
 
 
-printGeneric("")
+command_clear()
 command_settings()
 printGeneric("")
 
