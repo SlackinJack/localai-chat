@@ -9,6 +9,7 @@ from pptx import Presentation
 from pydub import AudioSegment
 from PyPDF2 import PdfReader
 
+from modules.file_operations import *
 from modules.utils import *
 
 
@@ -48,13 +49,6 @@ def getAudioText(filePath):
     return recog.recognize_google(src)
 
 
-def getFileText(filePath):
-    f = open(filePath, "r")
-    content = f.read()
-    f.close()
-    return content
-
-
 fileMap = {
     getPDFText: ["pdf"],
     getDOCXText: ["docx"],
@@ -73,7 +67,7 @@ def getFileContents(filePath):
                 functionCall = entry
                 content = functionCall(filePath)
                 return cleanupString(content)
-    content = cleanupString(getFileText(filePath))
+    content = cleanupString(readFile(filePath))
     printDump(content)
     return content
 

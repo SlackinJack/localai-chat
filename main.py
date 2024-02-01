@@ -7,9 +7,9 @@ import time
 from difflib import SequenceMatcher
 
 from modules.file_operations import *
-from modules.openfile import *
-from modules.search import *
+from modules.file_reader import *
 from modules.utils import *
+from modules.utils_web import *
 
 
 # TODO:
@@ -27,16 +27,12 @@ os.environ["OPENAI_API_KEY"] = "sk-xxx"
 
 
 #### CONFIGURATION LOADER ####
-fileConfig = open("config.cfg", "r")
-fileConfiguration = (fileConfig.read()).split("\n")
-fileConfig.close()
+fileConfiguration = readFile("", "config.cfg", "\n")
 initConfig(fileConfiguration)
 
 
 ####### MODELS LOADER #######
-fileModels = open("models.json", "r")
-fileModelsConfiguration = json.loads(fileModels.read())
-fileModels.close()
+fileModelsConfiguration = json.loads(readFile("", "models.json"))
 modelsDescriptions = ""
 modelsPrompts = {}
 modelsEnabled = {}

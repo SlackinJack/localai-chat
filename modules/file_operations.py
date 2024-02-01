@@ -1,14 +1,20 @@
 import glob
+
 from pathlib import Path
 
 
-def readFile(pathIn, filenameIn, splitter):
+def readFile(pathIn, filenameIn = "", splitter = ""):
     testpath = Path(pathIn + filenameIn)
     if testpath.is_file() is not True:
+        if len(filenameIn) == 0:
+            pathInSplit = pathIn.split("/")
+            filenameIn = pathInSplit[len(pathInSplit) - 1]
         writeFile(pathIn, filenameIn)
     openFile = open(pathIn + filenameIn, "r")
-    theFile = (openFile.read()).split(splitter)
+    theFile = openFile.read()
     openFile.close()
+    if len(splitter) > 0:
+        theFile = theFile.split(splitter)
     return theFile
 
 

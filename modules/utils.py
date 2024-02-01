@@ -5,6 +5,7 @@ import re
 import time
 
 from termcolor import colored
+# https://pypi.org/project/termcolor/
 
 
 configuration = dict()
@@ -16,14 +17,6 @@ def initConfig(fileConfiguration):
             key = line.split("=")[0]
             value = line.split("=")[1]
             configuration[key] = value
-
-
-################################################
-################## BEGIN CHAT ##################
-################################################
-
-
-# https://pypi.org/project/termcolor/
 
 
 def printInput(string):
