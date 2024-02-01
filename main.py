@@ -5,8 +5,8 @@ import os
 import time
 
 from difflib import SequenceMatcher
-from pathlib import Path
 
+from modules.file_operations import *
 from modules.openfile import *
 from modules.search import *
 from modules.utils import *
@@ -82,25 +82,18 @@ strConvoName = strConvoTimestamp
 
 def setConversation(filename):
     global strConvoName
-    testpath = Path("conversations/" + filename + ".convo")
-    if testpath.is_file() is not True:
-        open("conversations/" + filename + ".convo", "w").close()
+    writeFile("conversations/", filename + ".convo")
     strConvoName = filename
     return
 
 
 def writeConversation(strIn):
-    fileConvo = open("conversations/" + strConvoName + ".convo", "a")
-    fileConvo.write(strIn + "\n")
-    fileConvo.close()
+    appendFile("conversations/", strConvoName + ".convo", strIn + "\n")
     return
 
 
 def getConversation():
-    fileConvo = open("conversations/" + strConvoName + ".convo", "r")
-    fileConversation = (fileConvo.read()).split("\n")
-    fileConvo.close()
-    return fileConversation
+    return readFile("conversations/", strConvoName + ".convo", "\n")
 
 
 setConversation(strConvoTimestamp)
