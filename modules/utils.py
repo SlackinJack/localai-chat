@@ -125,6 +125,17 @@ def checkEmptyString(strIn):
     return True
 
 
+def formatArrayToString(dataIn, separator):
+    stringBuilder = ""
+    i = 0
+    while i < len(dataIn):
+        stringBuilder += dataIn[i]
+        if i is not len(dataIn) - 1:
+            stringBuilder += separator
+        i += 1
+    return stringBuilder
+
+
 def killLlama():
     hasResult = False
     for process in psutil.process_iter():

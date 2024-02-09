@@ -31,7 +31,6 @@ Goals are only "nice to haves".
 
 
 ## Setup:
-- You will need to make an additional role called "data" in your model configurations.
 - Use a completion chat template for your models.
 
 

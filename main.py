@@ -12,10 +12,6 @@ from modules.utils import *
 from modules.utils_web import *
 
 
-# TODO:
-# - split long input files then prompt after
-
-
 lastModelUsed = ""
 openai.api_key = OPENAI_API_KEY = "sk-xxx"
 os.environ["OPENAI_API_KEY"] = "sk-xxx"
@@ -360,19 +356,19 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     else:
         promptHistory = []
     if len(dataIn) > 0:
-        for data in dataIn:
-            promptHistory.append(
-                {
-                    "role": "data",
-                    "content": data,
-                }
-            )
-    promptHistory.append(
-        {
-            "role": "system",
-            "content": modelsPrompts[modelToUse],
-        }
-    )
+        promptHistory.append(
+            {
+                "role": "system",
+                "content": modelsPrompts[modelToUse] + "\nConsider the following data:" + formatArrayToString(dataIn, "\n"),
+            }
+        )
+    else:
+        promptHistory.append(
+            {
+                "role": "system",
+                "content": modelsPrompts[modelToUse],
+            }
+        )
     promptHistory.append(
         {
             "role": "user",
@@ -408,8 +404,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
             sys.stdout.flush()
             assistantResponse = assistantResponse + chunk.choices[0].delta.content
     if len(dataIn) > 0 and shouldWriteDataToConvo:
-        for entry in dataIn:
-            writeConversation("DATA: " + entry)
+        writeConversation("SYSTEM: Consider the following data: " + formatArrayToString(dataIn, "\n"))
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -529,6 +524,11 @@ def getFunctionResponse(promptIn):
             else:
                 printError("Function generation failed after 3 attempts! Defaulting to chat generation.")
                 break
+    dataBuilder = []
+    for key, value in dataCollection.items():
+        dataBuilder.append("[From " + key + "]" + value)
+    if len(dataBuilder) > 0:
+        writeConversation("SYSTEM: " + formatArrayToString(dataBuilder, "\n"))
     data = []
     for key, value in dataCollection.items():
         data.append(value)
@@ -537,8 +537,6 @@ def getFunctionResponse(promptIn):
         printResponse("\n\n\nSources analyzed:\n")
         for h in hrefs:
             printResponse(h)
-    for key, value in dataCollection.items():
-        writeConversation("DATA: " + "(From " + key + ")" + value)
     return
 
 
@@ -593,14 +591,8 @@ def getModelResponse(promptIn):
         promptMessage = []
         promptMessage.append(
             {
-                "role": "data",
-                "content": modelsDescriptions
-            }
-        )
-        promptMessage.append(
-            {
                 "role": "system",
-                "content": strTemplateModelSystemPrompt
+                "content": strTemplateModelSystemPrompt + "\nConsider the following descriptions of each model:" + modelsDescriptions
             }
         )
         promptMessage.append(
@@ -706,7 +698,7 @@ def getPromptHistory():
     promptHistoryStrings = []
     stringBuilder = ""
     for line in conversation:
-        if line.startswith("SYSTEM: ") or line.startswith("USER: ") or line.startswith("ASSISTANT: ") or line.startswith("DATA: " ):
+        if line.startswith("SYSTEM: ") or line.startswith("USER: ") or line.startswith("ASSISTANT: "):
             if len(stringBuilder) == 0:
                 stringBuilder += line
             else:
@@ -737,13 +729,6 @@ def getPromptHistory():
                     {
                         "role": "assistant",
                         "content": entry.replace("ASSISTANT: ", "", 1),
-                    }
-                )
-            elif entry.startswith("DATA: "):
-                promptHistory.append(
-                    {
-                        "role": "data",
-                        "content": entry.replace("DATA: ", "", 1),
                     }
                 )
     return promptHistory
