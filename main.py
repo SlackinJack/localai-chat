@@ -15,6 +15,7 @@ from modules.utils_web import *
 lastModelUsed = ""
 openai.api_key = OPENAI_API_KEY = "sk-xxx"
 os.environ["OPENAI_API_KEY"] = "sk-xxx"
+stopwords = ["<|im_end|>"]
 
 
 #################################################
@@ -35,7 +36,7 @@ modelsEnabled = {}
 for modelObj in fileModelsConfiguration:
     modelsPrompts[modelObj["name"]] = modelObj["prompt"]
     modelsEnabled[modelObj["name"]] = modelObj["isSwitchable"]
-    if len(modelObj["description"]) > 0:
+    if len(modelObj["description"]) > 0 and modelObj["isSwitchable"]:
         modelsDescriptions += modelObj["description"] + "\n"
 
 
@@ -55,12 +56,6 @@ shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 # STABLEDIFFUSION CONFIGURATION #
 strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
 strImageSize = configuration["IMAGE_SIZE"]
-
-
-### TEMPLATE CONFIGURATION ###
-strTemplateFunctionResultSearchTermsDescription = configuration["TEMPLATE_FUNCTION_RESULT_SEARCH_TERMS_DESCRIPTION"]
-strTemplateFunctionResponseSystemPrompt = configuration["TEMPLATE_FUNCTION_RESULT_SYSTEM_PROMPT"]
-strTemplateModelSystemPrompt = configuration["TEMPLATE_MODEL_SYSTEM_PROMPT"]
 
 
 #################################################
@@ -359,7 +354,9 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         promptHistory.append(
             {
                 "role": "system",
-                "content": modelsPrompts[modelToUse] + "\nConsider the following data:" + formatArrayToString(dataIn, "\n"),
+                "content": modelsPrompts[modelToUse] + """
+                
+                Use the following information in your response: """ + formatArrayToString(dataIn, "\n\n"),
             }
         )
     else:
@@ -388,23 +385,50 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
             )
             break
         except Exception as e:
-            if failedCompletions < 3:
-                printError("Failed to create completion! Trying again...")
-                printError(str(e))
+            printOpenAIError(e, failedCompletions)
+            if failedCompletions < 2:
+                failedCompletions += 1
                 time.sleep(3)
             else:
-                printError("Failed to create completion after 3 tries!")
-                printError(str(e))
                 return
     assistantResponse = ""
-    for chunk in completion:
-        if chunk.choices[0].delta.content is not None:
-            printResponse(chunk.choices[0].delta.content, "")
-            time.sleep(0.020)
-            sys.stdout.flush()
-            assistantResponse = assistantResponse + chunk.choices[0].delta.content
+    potentialStopwords = {}
+    stop = False
+    pausedLetters = ""
+    while not stop:
+        for chunk in completion:
+            letter = chunk.choices[0].delta.content
+            if letter is not None:
+                pause = False
+                hasAdded = False
+                # check stop words
+                for stopword in stopwords:
+                    if stopword.startswith(letter):
+                        potentialStopwords[stopword] = 1
+                        pausedLetters += letter
+                        hasAdded = True
+                        pause = True
+                # check current stop words
+                for stopword, index in potentialStopwords.items():
+                    if index > 1 or not hasAdded:
+                        if stopword[index] == letter:
+                            potentialStopwords[stopword] = index + 1
+                            pausedLetters += letter
+                            pause = True
+                            if index >= len(stopword) - 1:
+                                stop = True
+                if not pause and not stop:
+                    if len(pausedLetters) > 0:
+                        printResponse(pausedLetters, "")
+                        pausedLetters = ""
+                    printResponse(letter, "")
+                    time.sleep(0.020)
+                    sys.stdout.flush()
+                    assistantResponse = assistantResponse + letter
     if len(dataIn) > 0 and shouldWriteDataToConvo:
-        writeConversation("SYSTEM: Consider the following data: " + formatArrayToString(dataIn, "\n"))
+        writeConversation("""SYSTEM:
+        
+        Use the following information in your response: """ + formatArrayToString(dataIn, "\n\n"))
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -420,6 +444,11 @@ def getFunctionResponse(promptIn):
     hrefs = []
     dataCollection = {}
     tries = 0
+    actionEnums = [
+        "REPLY_TO_CONVERSATION",
+        "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
+    ]
+    actionEnumsAsString = formatArrayToString(actionEnums, "\n")
     while True:
         if shouldConsiderHistory:
             promptHistory = getPromptHistory()
@@ -428,7 +457,9 @@ def getFunctionResponse(promptIn):
         promptHistory.append(
             {
                 "role": "system",
-                "content": strTemplateFunctionResponseSystemPrompt,
+                "content": """Your goal is to respond accurately to the current conversation.
+                Determine your next action:
+                """ + actionEnumsAsString,
             }
         )
         promptHistory.append(
@@ -437,6 +468,9 @@ def getFunctionResponse(promptIn):
                 "content": promptIn,
             }
         )
+        printDump("Current prompt for function response:")
+        for obj in promptHistory:
+            printDump(str(obj))
         failedCompletions = 0
         while True:
             try:
@@ -451,14 +485,16 @@ def getFunctionResponse(promptIn):
                                 "properties": {
                                     "action": {
                                         "type": "string",
-                                        "enum": [
-                                            "REPLY_TO_CONVERSATION",
-                                            "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
-                                        ],
+                                        "enum": actionEnums,
                                     },
                                     "search_terms": {
                                         "type": "string",
-                                        "description": strTemplateFunctionResultSearchTermsDescription,
+                                        "description": """Determine the question or task that you are completing.
+                                        Then determine either a 'search term' or a 'search phrase' for the question.
+                                        Use short, specific, and descriptive vocabulary.
+                                        Consider the context and topic of the current conversation in your search.
+                                        Use a recommended maximum of 5 words.
+                                        """,
                                     },
                                 },
                                 "required": ["action", "search_terms"],
@@ -471,13 +507,11 @@ def getFunctionResponse(promptIn):
                 )
                 break
             except Exception as e:
-                if failedCompletions < 3:
-                    printError("Failed to create completion! Trying again...")
-                    printError(str(e))
+                printOpenAIError(e, failedCompletions)
+                if failedCompletions < 2:
+                    failedCompletions += 1
                     time.sleep(3)
                 else:
-                    printError("Failed to create completion after 3 tries!")
-                    printError(str(e))
                     return
         printDump("Current conversation:")
         for obj in promptHistory:
@@ -528,7 +562,9 @@ def getFunctionResponse(promptIn):
     for key, value in dataCollection.items():
         dataBuilder.append("[From " + key + "]" + value)
     if len(dataBuilder) > 0:
-        writeConversation("SYSTEM: " + formatArrayToString(dataBuilder, "\n"))
+        writeConversation("""SYSTEM:
+        
+        Use the following information in your response: """ + formatArrayToString(dataBuilder, "\n\n"))
     data = []
     for key, value in dataCollection.items():
         data.append(value)
@@ -553,13 +589,11 @@ def getImageResponse(promptIn):
             )
             break
         except Exception as e:
-            if failedCompletions < 3:
-                printError("Failed to create completion! Trying again...")
-                printError(str(e))
+            printOpenAIError(e, failedCompletions)
+            if failedCompletions < 2:
+                failedCompletions += 1
                 time.sleep(3)
             else:
-                printError("Failed to create completion after 3 tries!")
-                printError(str(e))
                 return
     theURL = completion.data[0].url
     split = theURL.split("/")
@@ -592,7 +626,9 @@ def getModelResponse(promptIn):
         promptMessage.append(
             {
                 "role": "system",
-                "content": strTemplateModelSystemPrompt + "\nConsider the following descriptions of each model:" + modelsDescriptions
+                "content": "Which assistant has the most relevant skills related to the task given by USER?" + """
+                Consider the following descriptions of each model:
+                """ + modelsDescriptions
             }
         )
         promptMessage.append(
@@ -601,6 +637,7 @@ def getModelResponse(promptIn):
                 "content": promptIn
             }
         )
+        printDump("Current prompt for model response:")
         for obj in promptMessage:
             printDump(str(obj))
         printDump("Choices: " + grammarStringBuilder)
@@ -614,20 +651,18 @@ def getModelResponse(promptIn):
                 )
                 break
             except Exception as e:
-                if failedCompletions < 3:
-                    printError("Failed to create completion! Trying again...")
-                    printError(str(e))
+                printOpenAIError(e, failedCompletions)
+                if failedCompletions < 2:
+                    failedCompletions += 1
                     time.sleep(3)
                 else:
-                    printError("Failed to create completion after 3 tries!")
-                    printError(str(e))
                     return
         model = completion.choices[0].message.content
         for modelName, prompt in modelsPrompts.items():
             if model in modelName or model == modelName:
                 printDebug("Determined model: " + modelName)
                 return modelName
-        return None
+        return
 
 
 ##################################################

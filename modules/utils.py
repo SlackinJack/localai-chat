@@ -136,6 +136,18 @@ def formatArrayToString(dataIn, separator):
     return stringBuilder
 
 
+def printOpenAIError(error, iteration):
+    if iteration < 2:
+        printError("Failed to create completion! Trying again...")
+    else:
+        printError("Failed to create completion after 3 tries!")
+    theError = json.loads(json.dumps(error.json_body["error"]))
+    code = theError["code"]
+    message = theError["message"]
+    printError("(" + str(code) + ": " + message + ")")
+    return
+
+
 def killLlama():
     hasResult = False
     for process in psutil.process_iter():
