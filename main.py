@@ -90,7 +90,6 @@ if currentModel is None:
     printRed("Your default model is missing from models.json! Please fix your configuration.")
 shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
-shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
 intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
 intMaxSources = int(configuration["MAX_SOURCES"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
@@ -476,8 +475,9 @@ def getFunctionResponse(promptIn):
     tries = 0
     actionEnums = [
         "REPLY_TO_CONVERSATION",
-        "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION"
+        "SEARCH_INTERNET_FOR_INFORMATION"
     ]
+    todaysDate = datetime.datetime.now().strftime("%A, %B %d, %Y")
     actionEnumsAsString = formatArrayToString(actionEnums, ", or ")
     while True:
         if shouldConsiderHistory:
@@ -488,9 +488,9 @@ def getFunctionResponse(promptIn):
             {
                 "role": "system",
                 "content": """Your goal is to respond accurately to the current conversation.
-Respond with 'SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION' to search for additional information.
-Respond with 'REPLY_TO_CONVERSATION' only when you have updated information, or are provided with updated information.
-Today's date: """ + datetime.datetime.now().strftime("%A, %B %d, %Y"),
+Respond with 'SEARCH_INTERNET_FOR_INFORMATION' to search for additional or updated information.
+Respond with 'REPLY_TO_CONVERSATION' only when you are provided with updated information.
+Today's date: """ + todaysDate,
             }
         )
         promptHistory.append(
@@ -524,7 +524,8 @@ Today's date: """ + datetime.datetime.now().strftime("%A, %B %d, %Y"),
 Then determine either 'a search term' or 'a search phrase' for the inquiry.
 Use short, specific, and descriptive vocabulary.
 Consider the context of the conversation in your search.
-Use a recommended maximum of five words.""",
+Use a recommended maximum of five words.
+Today's date: """ + todaysDate,
                                     },
                                 },
                                 "required": ["action", "search_terms"],
@@ -551,7 +552,7 @@ Use a recommended maximum of five words.""",
             printInfo("Next determined action is: " + arguments.get("action"))
             if arguments.get("action") in "REPLY_TO_CONVERSATION":
                 break
-            elif arguments.get("action") in "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION":
+            elif arguments.get("action") in "SEARCH_INTERNET_FOR_INFORMATION":
                 currentSearchString = arguments.get("search_terms")
                 if currentSearchString in searchedTerms:
                     printError("Duplicated previous search terms! Breaking out of loop.")
@@ -568,10 +569,7 @@ Use a recommended maximum of five words.""",
                             else:
                                 printDebug("Skipped duplicate source: " + key)
                     timesSearched += 1
-                    if not shouldLoopbackSearch:
-                        printInfo("You have search loopback disabled. Breaking out of loop.")
-                        break
-                    elif timesSearched >= intMaxLoopbackIterations:
+                    if timesSearched >= intMaxLoopbackIterations:
                         printInfo("Maximum number of searches reached! Breaking out of loop.")
                         break
                     else:
