@@ -65,20 +65,18 @@ def getEnabledModelDescriptions():
 
 
 def getCurrentModelSystemPrefixSuffix():
-    prefix = currentModel["model_system_prefix"]
-    if prefix is None:
-        prefix = ""
-    suffix = currentModel["model_system_suffix"]
-    if suffix is None:
-        suffix = ""
-    return [prefix, suffix]
+    return getCurrentModelPrefixSuffixFor("system")
 
 
 def getCurrentModelUserPrefixSuffix():
-    prefix = currentModel["model_user_prefix"]
+    return getCurrentModelPrefixSuffixFor("user")
+
+
+def getCurrentModelPrefixSuffixFor(modeIn):
+    prefix = currentModel["model_" + modeIn + "_prefix"]
+    suffix = currentModel["model_" + modeIn + "_suffix"]
     if prefix is None:
         prefix = ""
-    suffix = currentModel["model_user_suffix"]
     if suffix is None:
         suffix = ""
     return [prefix, suffix]
@@ -478,10 +476,9 @@ def getFunctionResponse(promptIn):
     tries = 0
     actionEnums = [
         "REPLY_TO_CONVERSATION",
-        "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
+        "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION"
     ]
-    actionEnumsAsString = formatArrayToString(actionEnums, """
- - """)
+    actionEnumsAsString = formatArrayToString(actionEnums, ", or ")
     while True:
         if shouldConsiderHistory:
             promptHistory = getPromptHistory()
@@ -491,10 +488,9 @@ def getFunctionResponse(promptIn):
             {
                 "role": "system",
                 "content": """Your goal is to respond accurately to the current conversation.
-You are able to use the internet to search for additional information.
-You will reply when you feel confident in formulating an accurate answer.
-Determine the next appropriate action:
- - """ + actionEnumsAsString,
+Respond with 'SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION' to search for additional information.
+Respond with 'REPLY_TO_CONVERSATION' only when you have updated information, or are provided with updated information.
+Today's date: """ + datetime.datetime.now().strftime("%A, %B %d, %Y"),
             }
         )
         promptHistory.append(
@@ -580,10 +576,10 @@ Use a recommended maximum of five words.""",
                         break
                     else:
                         printDebug("Looping back with search results.")
+                    tries = 0
             else:
                 printError("This action is invalid/unsupported! Breaking out of loop.")
                 break
-            tries = 0
         else:
             if tries < 3:
                 printError("Function generation failed! Trying again...")
