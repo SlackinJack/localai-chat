@@ -12,7 +12,6 @@ from modules.utils import *
 from modules.utils_web import *
 
 
-lastModelUsed = ""
 openai.api_key = OPENAI_API_KEY = "sk-xxx"
 os.environ["OPENAI_API_KEY"] = "sk-xxx"
 stopwords = ["<|im_end|>"]
@@ -30,20 +29,67 @@ initConfig(fileConfiguration)
 
 ####### MODELS LOADER #######
 fileModelsConfiguration = json.loads(readFile("", "models.json"))
-modelsDescriptions = ""
-modelsPrompts = {}
-modelsEnabled = {}
-for modelObj in fileModelsConfiguration:
-    modelsPrompts[modelObj["name"]] = modelObj["prompt"]
-    modelsEnabled[modelObj["name"]] = modelObj["isSwitchable"]
-    if len(modelObj["description"]) > 0 and modelObj["isSwitchable"]:
-        modelsDescriptions += modelObj["description"] + "\n"
+
+
+def getModelByName(modelNameIn):
+    for model in fileModelsConfiguration:
+        if modelNameIn in model["model_name"] or modelNameIn == model["model_name"]:
+            return model
+    return None
+
+
+def getCurrentModelName():
+    return currentModel["model_name"]
+
+
+def getCurrentModelSystemPrompt():
+    return currentModel["model_system_prompt"]
+
+
+def getEnabledModelNames():
+    out = []
+    for model in fileModelsConfiguration:
+        if model["model_enabled"]:
+            out.append(model["model_name"])
+    return out
+
+
+def getEnabledModelDescriptions():
+    out = ""
+    for model in fileModelsConfiguration:
+        if model["model_enabled"]:
+            if len(out) > 0:
+                out += " "
+            out += model["model_description"]
+    return out
+
+
+def getCurrentModelSystemPrefixSuffix():
+    prefix = currentModel["model_system_prefix"]
+    if prefix is None:
+        prefix = ""
+    suffix = currentModel["model_system_suffix"]
+    if suffix is None:
+        suffix = ""
+    return [prefix, suffix]
+
+
+def getCurrentModelUserPrefixSuffix():
+    prefix = currentModel["model_user_prefix"]
+    if prefix is None:
+        prefix = ""
+    suffix = currentModel["model_user_suffix"]
+    if suffix is None:
+        suffix = ""
+    return [prefix, suffix]
 
 
 ##### MAIN CONFIGURATION #####
 openai.api_base = configuration["ADDRESS"]
 shouldAutomaticallySwitchModels = (configuration["ENABLE_AUTOMATIC_MODEL_SWITCHING"] == "True")
-strModelDefault = configuration["DEFAULT_MODEL"]
+currentModel = getModelByName(configuration["DEFAULT_MODEL"])
+if currentModel is None:
+    printRed("Your default model is missing from models.json! Please fix your configuration.")
 shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 shouldLoopbackSearch = (configuration["SEARCH_LOOPBACK"] == "True")
@@ -97,16 +143,14 @@ def errorBlankEmptyText(sourceIn):
 
 
 def trigger_youtube(promptIn):
-    link = ""
-    ytId = ""
     for s in promptIn.split(" "):
         for linkFormat in triggerMap[trigger_youtube]:
             if s.startswith(linkFormat):
                 link = s
                 ytId = link.replace(linkFormat, "")
-                break
-    captions = getYouTubeCaptions(ytId)
-    getChatCompletionResponse(promptIn.replace(link, ""), [captions], True)
+                captions = getYouTubeCaptions(ytId)
+                getChatCompletionResponse(promptIn.replace(link, ""), [captions], True)
+                return
     return
 
 
@@ -163,7 +207,7 @@ def command_clear():
 
 def command_settings():
     printGeneric("Current Settings:\n")
-    printGeneric("Model: " + strModelDefault)
+    printGeneric("Model: " + getCurrentModelName())
     printSetting(shouldUseInternet, "Auto Internet Search")
     printSetting(shouldAutomaticallySwitchModels, "Automatically Switch Models")
     printSetting(shouldConsiderHistory, "Consider Chat History")
@@ -191,29 +235,25 @@ def command_convo():
 
 
 def command_model():
-    global strModelDefault
+    global currentModel
     printGeneric("Available models:")
-    for name, prompt in modelsPrompts.items():
-        printGeneric(name)
+    for model in fileModelsConfiguration:
+        printGeneric(model["model_name"])
     printSeparator()
-    model = printInput("Select a model (leave empty for current '" + strModelDefault + "'): ")
-    if len(model) == 0:
-        model = strModelDefault
+    nextModel = printInput("Select a model (leave empty for current '" + getCurrentModelName() + "'): ")
+    nextModelObj = None
+    if len(nextModel) == 0:
+        printRed("Keeping current model: " + getCurrentModelName())
     else:
-        matched = False
-        for name, prompt in modelsPrompts.items():
-            if model in name or model == name:
-                model = name
-                matched = True
-                break
-        if not matched:
-            printRed("Can't find a match! Using current model " + strModelDefault)
-            model = strModelDefault
-    if lastModelUsed != model:
-        killLlama()
-    strModelDefault = model
-    printSeparator()
-    printGreen("Chat model set to: " + model)
+        nextModelObj = getModelByName(nextModel)
+        if nextModelObj is None:
+            printRed("Can't find a match! Keeping current model: " + getCurrentModelName())
+        else:
+            if currentModel is not nextModelObj:
+                killLlama()
+            currentModel = nextModelObj
+            printSeparator()
+            printGreen("Chat model set to: " + getCurrentModelName())
     return
 
 
@@ -339,12 +379,10 @@ def function_model(assistant_name):
 
 
 def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo = False):
-    modelToUse = getModelResponse(userPromptIn)
-    if modelToUse is None:
-        modelToUse = strModelDefault
-    global lastModelUsed
-    if lastModelUsed != modelToUse:
-        lastModelUsed = modelToUse
+    nextModel = getModelResponse(userPromptIn)
+    global currentModel
+    if nextModel is not None and nextModel is not currentModel:
+        currentModel = nextModel
         killLlama()
     if shouldConsiderHistory:
         promptHistory = getPromptHistory()
@@ -354,22 +392,21 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         promptHistory.append(
             {
                 "role": "system",
-                "content": modelsPrompts[modelToUse] + """
-                
-                Use the following information in your response: """ + formatArrayToString(dataIn, "\n\n"),
+                "content": getCurrentModelSystemPrefixSuffix()[0] + getCurrentModelSystemPrompt() + """
+Use the following information in your response: """ + formatArrayToString(dataIn, "\n\n") + getCurrentModelSystemPrefixSuffix()[1],
             }
         )
     else:
         promptHistory.append(
             {
                 "role": "system",
-                "content": modelsPrompts[modelToUse],
+                "content": getCurrentModelSystemPrefixSuffix()[0] + getCurrentModelSystemPrompt() + getCurrentModelSystemPrefixSuffix()[1],
             }
         )
     promptHistory.append(
         {
             "role": "user",
-            "content": userPromptIn,
+            "content": getCurrentModelUserPrefixSuffix()[0] + userPromptIn + getCurrentModelUserPrefixSuffix()[1],
         }
     )
     printDump("Current conversation:")
@@ -379,7 +416,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     while True:
         try:
             completion = openai.ChatCompletion.create(
-                model = modelToUse,
+                model = getCurrentModelName(),
                 stream = True,
                 messages = promptHistory,
             )
@@ -427,18 +464,13 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                     assistantResponse = assistantResponse + letter
     if len(dataIn) > 0 and shouldWriteDataToConvo:
         writeConversation("""SYSTEM:
-        
-        Use the following information in your response: """ + formatArrayToString(dataIn, "\n\n"))
+Use the following information in your response: """ + formatArrayToString(dataIn, "\n\n"))
     writeConversation("USER: " + userPromptIn)
     writeConversation("ASSISTANT: " + assistantResponse)
     return
 
 
 def getFunctionResponse(promptIn):
-    global lastModelUsed
-    if lastModelUsed != strModelDefault:
-        lastModelUsed = strModelDefault
-        killLlama()
     timesSearched = 0
     searchedTerms = []
     hrefs = []
@@ -448,7 +480,8 @@ def getFunctionResponse(promptIn):
         "REPLY_TO_CONVERSATION",
         "SEARCH_INTERNET_FOR_ADDITIONAL_INFORMATION",
     ]
-    actionEnumsAsString = formatArrayToString(actionEnums, "\n")
+    actionEnumsAsString = formatArrayToString(actionEnums, """
+ - """)
     while True:
         if shouldConsiderHistory:
             promptHistory = getPromptHistory()
@@ -458,8 +491,10 @@ def getFunctionResponse(promptIn):
             {
                 "role": "system",
                 "content": """Your goal is to respond accurately to the current conversation.
-                Determine your next action:
-                """ + actionEnumsAsString,
+You are able to use the internet to search for additional information.
+You will reply when you feel confident in formulating an accurate answer.
+Determine the next appropriate action:
+ - """ + actionEnumsAsString,
             }
         )
         promptHistory.append(
@@ -475,7 +510,7 @@ def getFunctionResponse(promptIn):
         while True:
             try:
                 completion = openai.ChatCompletion.create(
-                    model = strModelDefault,
+                    model = getCurrentModelName(),
                     messages = promptHistory,
                     functions = [
                         {
@@ -489,12 +524,11 @@ def getFunctionResponse(promptIn):
                                     },
                                     "search_terms": {
                                         "type": "string",
-                                        "description": """Determine the question or task that you are completing.
-                                        Then determine either a 'search term' or a 'search phrase' for the question.
-                                        Use short, specific, and descriptive vocabulary.
-                                        Consider the context and topic of the current conversation in your search.
-                                        Use a recommended maximum of 5 words.
-                                        """,
+                                        "description": """Determine the question or task.
+Then determine either 'a search term' or 'a search phrase' for the inquiry.
+Use short, specific, and descriptive vocabulary.
+Consider the context of the conversation in your search.
+Use a recommended maximum of five words.""",
                                     },
                                 },
                                 "required": ["action", "search_terms"],
@@ -563,7 +597,6 @@ def getFunctionResponse(promptIn):
         dataBuilder.append("[From " + key + "]" + value)
     if len(dataBuilder) > 0:
         writeConversation("""SYSTEM:
-        
         Use the following information in your response: """ + formatArrayToString(dataBuilder, "\n\n"))
     data = []
     for key, value in dataCollection.items():
@@ -606,29 +639,22 @@ def getImageResponse(promptIn):
 
 
 def getModelResponse(promptIn):
-    global lastModelUsed
-    if lastModelUsed != strModelDefault:
-        lastModelUsed = strModelDefault
-        killLlama()
     if not shouldAutomaticallySwitchModels:
-        return strModelDefault
+        return currentModel
     else:
         grammarStringBuilder = "root ::= ("
-        for model, enabled in modelsEnabled.items():
-            if enabled:
-                if len(grammarStringBuilder) > 10:
-                    grammarStringBuilder += " | "
-                grammarStringBuilder += "\"" + model + "\""
-            else:
-                printDebug("Skipping model: " + model)
+        for modelName in getEnabledModelNames():
+            if len(grammarStringBuilder) > 10:
+                grammarStringBuilder += " | "
+            grammarStringBuilder += "\"" + modelName + "\""
         grammarStringBuilder += ")"
         promptMessage = []
         promptMessage.append(
             {
                 "role": "system",
                 "content": "Which assistant has the most relevant skills related to the task given by USER?" + """
-                Consider the following descriptions of each model:
-                """ + modelsDescriptions
+Consider the following descriptions of each model:
+""" + getEnabledModelDescriptions()
             }
         )
         promptMessage.append(
@@ -645,7 +671,7 @@ def getModelResponse(promptIn):
         while True:
             try:
                 completion = openai.ChatCompletion.create(
-                    model = strModelDefault,
+                    model = getCurrentModelName(),
                     messages = promptMessage,
                     grammar = grammarStringBuilder
                 )
@@ -656,13 +682,10 @@ def getModelResponse(promptIn):
                     failedCompletions += 1
                     time.sleep(3)
                 else:
-                    return
-        model = completion.choices[0].message.content
-        for modelName, prompt in modelsPrompts.items():
-            if model in modelName or model == modelName:
-                printDebug("Determined model: " + modelName)
-                return modelName
-        return
+                    return None
+        nextModel = completion.choices[0].message.content
+        printDump("Next model: " + nextModel)
+        return getModelByName(nextModel)
 
 
 ##################################################
