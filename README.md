@@ -46,9 +46,8 @@ Goals are only "nice to haves".
 - 2x Xeon X5650
 - Python 3.10
 - Model(s):
-    - CatPPT-base-Q2_K
-    - uncensored-jordan-7b.Q4_K_S
-    - mistral-7b-instruct-v0.2-code-ft.Q4_K_S
-    - Samantha-1.11-7b-ggml-model-q4_0
+    - CatPPT-base-Mistral-7B-Instruct-v0.1.Q3_K_S
+    - mistral-7b-instruct-v0.2-code-ft.Q3_K_S
+    - samantha-mistral-7b-Mistral-7B-Instruct-v0.1.Q3_K_S
 - LocalAI 1.40.0 (main), LocalAI 2.5.1 (occasionally tested)
 

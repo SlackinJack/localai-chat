@@ -18,6 +18,7 @@ stopwords = ["<|im_end|>"]
 
 
 # TODO:
+# - Add func to format prompts
 # - Error catch offline server
 # - Restrict output to input information only
 
@@ -353,7 +354,7 @@ commandMap = {
 #################################################
 
 
-def function_result(actions, search_terms):
+def function_result(action, search_terms):
     return
 
 
@@ -484,6 +485,10 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
 
 
 def getFunctionResponse(promptIn):
+    timesSearched = 0
+    searchedTerms = []
+    hrefs = []
+    dataCollection = {}
     tries = 0
     actionEnums = [
         "REPLY_TO_CONVERSATION",
@@ -496,10 +501,14 @@ def getFunctionResponse(promptIn):
             promptHistory = getPromptHistory()
         else:
             promptHistory = []
+        # Functions dont need prefixes!
         promptHistory.append(
             {
                 "role": "system",
-                "content": "You will create a list of actions that will completed in order to respond to the current conversation."
+                "content": """Your goal is to respond accurately to the current conversation.
+Respond with 'REPLY_TO_CONVERSATION' when you can reply to the conversation.
+Respond with 'SEARCH_INTERNET_FOR_INFORMATION' to search for specific information, or updated and current events.
+Today's date: """ + todaysDate,
             }
         )
         promptHistory.append(
@@ -512,6 +521,10 @@ def getFunctionResponse(promptIn):
         for obj in promptHistory:
             printDump(str(obj))
         failedCompletions = 0
+        # [SEARCH, searchTerm]
+        # [SEARCH, searchTerm2]
+        # [SEARCH, searchTerm3]
+        # [REPLY, none]
         while True:
             try:
                 completion = openai.ChatCompletion.create(
@@ -523,25 +536,21 @@ def getFunctionResponse(promptIn):
                             "parameters": {
                                 "type": "object",
                                 "properties": {
-                                    "actions": {
-                                        "type": "array",
-                                        "description": "An array of actions to be completed. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for updated or specific information. Use 'REPLY_TO_CONVERSATION' only as the final action.",
-                                        "items": {
-                                            "type": "string",
-                                            "description": "The action.",
-                                            "enum": actionEnums,
-                                        },
+                                    "action": {
+                                        "type": "string",
+                                        "enum": actionEnums,
                                     },
                                     "search_terms": {
-                                        "type": "array",
-                                        "description": "An array of search terms. The last array item must always be empty.",
-                                        "items": {
-                                            "type": "string",
-                                            "description": "The search term.",
-                                        },
+                                        "type": "string",
+                                        "description": """Determine the question or task.
+Then determine either 'a search term' or 'a search phrase' for the inquiry.
+Use short, specific, and descriptive vocabulary.
+Consider the context of the conversation in your search.
+Use a recommended maximum of seven words.
+Today's date: """ + todaysDate
                                     },
                                 },
-                                "required": ["actions", "search_terms"],
+                                "required": ["action", "search_terms"],
                             },
                         },
                     ],
@@ -561,37 +570,42 @@ def getFunctionResponse(promptIn):
         for obj in promptHistory:
             printDump(str(obj))
         arguments = json.loads(completion.choices[0].message.function_call.arguments)
-        if arguments is not None and arguments.get("actions") is not None:
-            actions = arguments.get("actions")
-            searchTerms = arguments.get("search_terms")
-            while len(actions) < len(searchTerms):
-                actions.insert(0, "SEARCH_INTERNET_FOR_INFORMATION")
-            i = 0
-            hrefs = []
-            dataCollection = {}
-            for action in actions:
-                if action != "REPLY_TO_CONVERSATION":
-                    if action == "SEARCH_INTERNET_FOR_INFORMATION":
-                        searchTerm = searchTerms[i]
-                        if searchTerm is not None and len(searchTerm) > 0:
-                            searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
-                            if len(searchResults) > 0:
-                                for key, value in searchResults.items():
-                                    if key not in hrefs:
-                                        hrefs.append(key)
-                                        dataCollection[key] = value
-                                        printDump("Appending search result: [" + key + "] " + value)
-                                    else:
-                                        printDebug("Skipped duplicate source: " + key)
-                            i += 1
-                        else:
-                            break
-                    else:
-                        # edit for additional actions later
+        if arguments is not None and arguments.get("action") is not None:
+            printInfo("Next determined action is: " + arguments.get("action"))
+            if arguments.get("action") in "REPLY_TO_CONVERSATION":
+                break
+            elif arguments.get("action") in "SEARCH_INTERNET_FOR_INFORMATION":
+                currentSearchString = arguments.get("search_terms")
+                if currentSearchString in searchedTerms:
+                    printError("Duplicated previous search terms! Trying to generate new ones instead.")
+                    currentSearchString = getChatCompletionGeneric("""Rephrase the following search terms.
+Keep your response to a single sentence.
+Use a recommended maximum of seven words.""", currentSearchString, False)
+                    if currentSearchString is None or currentSearchString in searchedTerms:
+                        printError("Duplicated previous search terms! Breaking out of loop.")
                         break
-                else:
+                    else:
+                        printDebug("New search terms: " + currentSearchString)
+                searchedTerms.append(currentSearchString)
+                searchResults = getSearchResponse(currentSearchString, intMaxSources, intMaxSentences)
+                if len(searchResults) > 0:
+                    for key, value in searchResults.items():
+                        if key not in hrefs:
+                            hrefs.append(key)
+                            dataCollection[key] = value
+                            printDump("Appending search result: [" + key + "] " + value)
+                        else:
+                            printDebug("Skipped duplicate source: " + key)
+                timesSearched += 1
+                if timesSearched >= intMaxLoopbackIterations:
+                    printInfo("Maximum number of searches reached! Breaking out of loop.")
                     break
-            break
+                else:
+                    printDebug("Looping back with search results.")
+                tries = 0
+            else:
+                printError("This action is invalid/unsupported! Breaking out of loop.")
+                break
         else:
             if tries < 3:
                 printError("Function generation failed! Trying again...")

@@ -52,8 +52,10 @@ def searchDDG(keywords, maxSources):
 jsErrors = [
         "JavaScript",
         "JS",
-        "browser",
         "enable",
+        "is not supported",
+        "another browser",
+        "supported browser",
 ]
 
 blockedErrors = [
