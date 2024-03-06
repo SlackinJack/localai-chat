@@ -13,7 +13,7 @@
         "model_name": "code-7b",
         "model_enabled": true,
         "model_description": "Code is an assistant who is trained for programming, code and coding, software development.",
-        "model_system_prompt": "You will complete the given task. Use proper formatting and spacing in your code, or fix the existing formatting. Respond with only your code.",
+        "model_system_prompt": "Complete the given task. Implement proper formatting. Respond with only your code. Assume the user is an experienced programmer.",
         "model_system_prefix": "<|im_start|>system\n",
         "model_system_suffix": "<|im_end|>",
         "model_user_prefix": "<|im_start|>user\n",

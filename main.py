@@ -21,7 +21,7 @@ stopwords = ["<|im_end|>"]
 # - Error catch offline server
 # - Restrict output to input information only
 
-strRespondUsingInformation = "Respond using the following information: "
+strRespondUsingInformation = "Constrict and restrict your response to the following information: "
 
 
 #################################################
@@ -99,6 +99,7 @@ shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
 intMaxSources = int(configuration["MAX_SOURCES"])
+intMaxSearchTerms = int(configuration["MAX_SEARCH_TERMS"])
 intMaxSentences = int(configuration["MAX_SENTENCES"])
 shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
 
@@ -442,13 +443,13 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     potentialStopwords = {}
     stop = False
     pausedLetters = ""
-    tic = time.perf_counter()
-    toc = tic
+    # TODO: fix this
+    tic = toc = time.perf_counter()
     while not stop and (toc - tic < 20.0):
+        toc = time.perf_counter()
         for chunk in completion:
             letter = chunk.choices[0].delta.content
             if letter is not None:
-                toc = time.perf_counter()
                 pause = False
                 hasAdded = False
                 # check stop words
@@ -525,7 +526,7 @@ def getFunctionResponse(promptIn):
                                 "properties": {
                                     "actions": {
                                         "type": "array",
-                                        "description": "An array of actions to be completed. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for updated or specific information. Use 'REPLY_TO_CONVERSATION' only as the final action.",
+                                        "description": "An array of actions to be completed. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for updated resources. Use 'REPLY_TO_CONVERSATION' only as the final action.",
                                         "items": {
                                             "type": "string",
                                             "description": "The action.",
@@ -534,7 +535,7 @@ def getFunctionResponse(promptIn):
                                     },
                                     "search_terms": {
                                         "type": "array",
-                                        "description": "An array of search terms. The last array item must always be empty.",
+                                        "description": "An array of search terms. There should be a maximum of " + str(intMaxSearchTerms + 1) + "items, and the last  item must always be empty.",
                                         "items": {
                                             "type": "string",
                                             "description": "The search term.",
@@ -561,6 +562,7 @@ def getFunctionResponse(promptIn):
         for obj in promptHistory:
             printDump(str(obj))
         arguments = json.loads(completion.choices[0].message.function_call.arguments)
+        isOnlineResponse = False
         if arguments is not None and arguments.get("actions") is not None:
             actions = arguments.get("actions")
             searchTerms = arguments.get("search_terms")
@@ -572,18 +574,22 @@ def getFunctionResponse(promptIn):
             for action in actions:
                 if action != "REPLY_TO_CONVERSATION":
                     if action == "SEARCH_INTERNET_FOR_INFORMATION":
-                        searchTerm = searchTerms[i]
-                        if searchTerm is not None and len(searchTerm) > 0:
-                            searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
-                            if len(searchResults) > 0:
-                                for key, value in searchResults.items():
-                                    if key not in hrefs:
-                                        hrefs.append(key)
-                                        dataCollection[key] = value
-                                        printDump("Appending search result: [" + key + "] " + value)
-                                    else:
-                                        printDebug("Skipped duplicate source: " + key)
-                            i += 1
+                        isOnlineResponse = True
+                        if i < len(searchTerms) and i < intMaxSearchTerms - 1:
+                            searchTerm = searchTerms[i]
+                            if searchTerm is not None and len(searchTerm) > 0:
+                                searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
+                                if len(searchResults) > 0:
+                                    for key, value in searchResults.items():
+                                        if key not in hrefs:
+                                            hrefs.append(key)
+                                            dataCollection[key] = value
+                                            printDump("Appending search result: [" + key + "] " + value)
+                                        else:
+                                            printDebug("Skipped duplicate source: " + key)
+                                i += 1
+                            else:
+                                break
                         else:
                             break
                     else:
@@ -608,6 +614,8 @@ def getFunctionResponse(promptIn):
     data = []
     for key, value in dataCollection.items():
         data.append(value)
+    if not isOnlineResponse:
+        printInfo("This is an offline response!")
     getChatCompletionResponse(promptIn, data, False)
     if len(hrefs) > 0:
         printResponse("\n\n\nSources analyzed:\n")
