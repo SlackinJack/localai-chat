@@ -142,10 +142,14 @@ def printOpenAIError(error, iteration):
         printError("Failed to create completion! Trying again...")
     else:
         printError("Failed to create completion after 3 tries!")
-    theError = json.loads(json.dumps(error.json_body["error"]))
-    code = theError["code"]
-    message = theError["message"]
-    printError("(" + str(code) + ": " + message + ")")
+    if error.json_body is None:
+        printError("Failed to read the error!")
+        printError("(Are you sure you have the correct address set?)")
+    else:
+        theError = json.loads(json.dumps(error.json_body["error"]))
+        code = theError["code"]
+        message = theError["message"]
+        printError("(" + str(code) + ": " + message + ")")
     return
 
 

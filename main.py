@@ -18,8 +18,8 @@ stopwords = ["<|im_end|>"]
 
 
 # TODO:
-# - Error catch offline server
 # - Restrict output to input information only
+# - Get more resources if the information is too short / insufficient
 
 strRespondUsingInformation = "Constrict and restrict your response to the following information: "
 
@@ -699,7 +699,7 @@ Consider the following descriptions of each model:
                 else:
                     return None
         nextModel = completion.choices[0].message.content
-        printDump("Next model: " + nextModel)
+        printDebug("Next model: " + nextModel)
         return getModelByName(nextModel)
 
 
