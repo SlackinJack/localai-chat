@@ -11,22 +11,20 @@ from modules.file_reader import *
 from modules.utils import *
 from modules.utils_web import *
 
-
-openai.api_key = OPENAI_API_KEY = "sk-xxx"
-os.environ["OPENAI_API_KEY"] = "sk-xxx"
-stopwords = ["<|im_end|>"]
-
-
 # TODO:
 # - Restrict output to input information only
 # - Get more resources if the information is too short / insufficient
-
-strRespondUsingInformation = "Constrict and restrict your response to the following information: "
-
+# - Code cleanup
 
 #################################################
 ############## BEGIN CONFIGURATION ##############
 #################################################
+
+
+#### STATIC CONFIGURATION ####
+stopwords = ["<|im_end|>"]
+openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
+strRespondUsingInformation = "Constrict and restrict your response to the following information: "
 
 
 #### CONFIGURATION LOADER ####
@@ -95,6 +93,7 @@ shouldAutomaticallySwitchModels = (configuration["ENABLE_AUTOMATIC_MODEL_SWITCHI
 currentModel = getModelByName(configuration["DEFAULT_MODEL"])
 if currentModel is None:
     printRed("Your default model is missing from models.json! Please fix your configuration.")
+    exit()
 shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
 shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
 intMaxLoopbackIterations = int(configuration["MAX_SEARCH_LOOPBACK_ITERATIONS"])
@@ -142,11 +141,6 @@ setConversation(strConvoTimestamp)
 ##################################################
 
 
-def errorBlankEmptyText(sourceIn):
-    printError("The " + sourceIn + " is empty/blank!")
-    return "The text received from the " + sourceIn + " is blank and/or empty. Notify the user about this."
-
-
 def trigger_youtube(promptIn):
     for s in promptIn.split(" "):
         for linkFormat in triggerMap[trigger_youtube]:
@@ -166,7 +160,7 @@ def trigger_browse(promptIn):
             if checkEmptyString(websiteText):
                 websiteText = errorBlankEmptyText("website")
             getChatCompletionResponse(promptIn.replace(s, ""), [websiteText], True)
-            break
+            return
     return
 
 
@@ -365,41 +359,34 @@ def function_model(assistant_name):
 def getChatCompletionGeneric(systemPromptIn, userPromptIn, hasUserInstructions):
     if hasUserInstructions:
         userPromptIn = getCurrentModelUserPrefixSuffix()[0] + userPromptIn + getCurrentModelUserPrefixSuffix()[1]
-    failedCompletions = 0
-    try:
-        completion = openai.ChatCompletion.create(
-            model = getCurrentModelName(),
-            messages = [
-                {
-                    "role": "system",
-                    "content": getCurrentModelSystemPrefixSuffix()[0] + systemPromptIn + getCurrentModelSystemPrefixSuffix()[1]
-                },
-                {
-                    "role": "user",
-                    "content": userPromptIn
-                },
-            ],
-        )
-        return completion.choices[0].message.content
-    except Exception as e:
-        printOpenAIError(e, failedCompletions)
-        if failedCompletions < 2:
-            failedCompletions += 1
-            time.sleep(3)
-        else:
-            return None
+    
+    messages = [
+        {
+            "role": "system",
+            "content": getCurrentModelSystemPrefixSuffix()[0] + systemPromptIn + getCurrentModelSystemPrefixSuffix()[1]
+        },
+        {
+            "role": "user",
+            "content": userPromptIn
+        },
+    ]
+    
+    return createOpenAIChatCompletionRequest(getCurrentModelName(), messages)
 
 
 def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo = False):
     nextModel = getModelResponse(userPromptIn)
+    
     global currentModel
     if nextModel is not None and nextModel is not currentModel:
         currentModel = nextModel
         killLlama()
+    
     if shouldConsiderHistory:
         promptHistory = getPromptHistory()
     else:
         promptHistory = []
+    
     if len(dataIn) > 0:
         promptHistory.append(
             {
@@ -414,73 +401,63 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                 "content": getCurrentModelSystemPrefixSuffix()[0] + getCurrentModelSystemPrompt() + getCurrentModelSystemPrefixSuffix()[1],
             }
         )
+    
     promptHistory.append(
         {
             "role": "user",
             "content": getCurrentModelUserPrefixSuffix()[0] + userPromptIn + getCurrentModelUserPrefixSuffix()[1],
         }
     )
+    
     printDump("Current conversation:")
     for obj in promptHistory:
         printDump(str(obj))
-    failedCompletions = 0
-    while True:
-        try:
-            completion = openai.ChatCompletion.create(
-                model = getCurrentModelName(),
-                stream = True,
-                messages = promptHistory,
-            )
-            break
-        except Exception as e:
-            printOpenAIError(e, failedCompletions)
-            if failedCompletions < 2:
-                failedCompletions += 1
-                time.sleep(3)
-            else:
-                return
-    assistantResponse = ""
-    potentialStopwords = {}
-    stop = False
-    pausedLetters = ""
-    # TODO: fix this
-    tic = toc = time.perf_counter()
-    while not stop and (toc - tic < 20.0):
-        toc = time.perf_counter()
-        for chunk in completion:
-            letter = chunk.choices[0].delta.content
-            if letter is not None:
-                pause = False
-                hasAdded = False
-                # check stop words
-                for stopword in stopwords:
-                    if stopword.startswith(letter):
-                        potentialStopwords[stopword] = 1
-                        pausedLetters += letter
-                        hasAdded = True
-                        pause = True
-                # check current stop words
-                for stopword, index in potentialStopwords.items():
-                    if index > 1 or not hasAdded:
-                        if stopword[index] == letter:
-                            potentialStopwords[stopword] = index + 1
+    
+    completion = createOpenAIChatCompletionRequest(getCurrentModelName(), promptHistory, shouldStream = True)
+    
+    if completion is not None:
+        assistantResponse = ""
+        potentialStopwords = {}
+        stop = False
+        pausedLetters = ""
+        # TODO: fix this
+        tic = toc = time.perf_counter()
+        while not stop and (toc - tic < 20.0):
+            toc = time.perf_counter()
+            for chunk in completion:
+                letter = chunk.choices[0].delta.content
+                if letter is not None:
+                    pause = False
+                    hasAdded = False
+                    # check stop words
+                    for stopword in stopwords:
+                        if stopword.startswith(letter):
+                            potentialStopwords[stopword] = 1
                             pausedLetters += letter
+                            hasAdded = True
                             pause = True
-                            if index >= len(stopword) - 1:
-                                stop = True
-                if not pause and not stop:
-                    if len(pausedLetters) > 0:
-                        printResponse(pausedLetters, "")
-                        pausedLetters = ""
-                    printResponse(letter, "")
-                    tic = toc
-                    time.sleep(0.020)
-                    sys.stdout.flush()
-                    assistantResponse = assistantResponse + letter
-    if len(dataIn) > 0 and shouldWriteDataToConvo:
-        writeConversation("SYSTEM: \n" + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n"))
-    writeConversation("USER: " + userPromptIn)
-    writeConversation("ASSISTANT: " + assistantResponse)
+                    # check current stop words
+                    for stopword, index in potentialStopwords.items():
+                        if index > 1 or not hasAdded:
+                            if stopword[index] == letter:
+                                potentialStopwords[stopword] = index + 1
+                                pausedLetters += letter
+                                pause = True
+                                if index >= len(stopword) - 1:
+                                    stop = True
+                    if not pause and not stop:
+                        if len(pausedLetters) > 0:
+                            printResponse(pausedLetters, "")
+                            pausedLetters = ""
+                        printResponse(letter, "")
+                        tic = toc
+                        time.sleep(0.020)
+                        sys.stdout.flush()
+                        assistantResponse = assistantResponse + letter
+        if len(dataIn) > 0 and shouldWriteDataToConvo:
+            writeConversation("SYSTEM: \n" + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n"))
+        writeConversation("USER: " + userPromptIn)
+        writeConversation("ASSISTANT: " + assistantResponse)
     return
 
 
@@ -513,55 +490,40 @@ def getFunctionResponse(promptIn):
         for obj in promptHistory:
             printDump(str(obj))
         failedCompletions = 0
-        while True:
-            try:
-                completion = openai.ChatCompletion.create(
-                    model = getCurrentModelName(),
-                    messages = promptHistory,
-                    functions = [
-                        {
-                            "name": "function_result",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "actions": {
-                                        "type": "array",
-                                        "description": "An array of actions to be completed. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for updated resources. Use 'REPLY_TO_CONVERSATION' only as the final action.",
-                                        "items": {
-                                            "type": "string",
-                                            "description": "The action.",
-                                            "enum": actionEnums,
-                                        },
-                                    },
-                                    "search_terms": {
-                                        "type": "array",
-                                        "description": "An array of search terms. There should be a maximum of " + str(intMaxSearchTerms + 1) + "items, and the last  item must always be empty.",
-                                        "items": {
-                                            "type": "string",
-                                            "description": "The search term.",
-                                        },
-                                    },
-                                },
-                                "required": ["actions", "search_terms"],
+        functions = [
+            {
+                "name": "function_result",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "actions": {
+                            "type": "array",
+                            "description": "An array of actions to be completed. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for updated resources. Use 'REPLY_TO_CONVERSATION' only as the final action.",
+                            "items": {
+                                "type": "string",
+                                "description": "The action.",
+                                "enum": actionEnums,
                             },
                         },
-                    ],
-                    function_call = {
-                        "name": "function_result",
+                        
+                        "search_terms": {
+                            "type": "array",
+                            "description": "An array of search terms. There should be a maximum of " + str(intMaxSearchTerms + 1) + "items, and the last  item must always be empty.",
+                            "items": {
+                                "type": "string",
+                                "description": "The search term.",
+                            },
+                        },
                     },
-                )
-                break
-            except Exception as e:
-                printOpenAIError(e, failedCompletions)
-                if failedCompletions < 2:
-                    failedCompletions += 1
-                    time.sleep(3)
-                else:
-                    return
-        printDump("Current conversation:")
-        for obj in promptHistory:
-            printDump(str(obj))
-        arguments = json.loads(completion.choices[0].message.function_call.arguments)
+                    
+                    "required": ["actions", "search_terms"],
+                }
+            }
+        ]
+        
+        function_call = {"name": "function_result"}
+        
+        arguments = createOpenAIChatCompletionRequest(getCurrentModelName(), promptHistory, functionsIn = functions, functionCallIn = function_call)
         isOnlineResponse = False
         if arguments is not None and arguments.get("actions") is not None:
             actions = arguments.get("actions")
@@ -664,6 +626,7 @@ def getModelResponse(promptIn):
             grammarStringBuilder += "\"" + modelName + "\""
         grammarStringBuilder += ")"
         promptMessage = []
+        
         promptMessage.append(
             {
                 "role": "system",
@@ -682,23 +645,7 @@ Consider the following descriptions of each model:
         for obj in promptMessage:
             printDump(str(obj))
         printDump("Choices: " + grammarStringBuilder)
-        failedCompletions = 0
-        while True:
-            try:
-                completion = openai.ChatCompletion.create(
-                    model = getCurrentModelName(),
-                    messages = promptMessage,
-                    grammar = grammarStringBuilder
-                )
-                break
-            except Exception as e:
-                printOpenAIError(e, failedCompletions)
-                if failedCompletions < 2:
-                    failedCompletions += 1
-                    time.sleep(3)
-                else:
-                    return None
-        nextModel = completion.choices[0].message.content
+        nextModel = createOpenAIChatCompletionRequest(getCurrentModelName(), promptMessage, grammarIn = grammarStringBuilder)
         printDebug("Next model: " + nextModel)
         return getModelByName(nextModel)
 

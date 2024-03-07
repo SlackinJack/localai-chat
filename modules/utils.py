@@ -1,4 +1,5 @@
 import json
+import openai
 import os
 import psutil
 import random
@@ -137,11 +138,45 @@ def formatArrayToString(dataIn, separator):
     return stringBuilder
 
 
+def errorBlankEmptyText(sourceIn):
+    printError("The " + sourceIn + " is empty/blank!")
+    return "The text received from the " + sourceIn + " is blank and/or empty. Notify the user about this."
+
+
+def createOpenAIChatCompletionRequest(modelIn, messagesIn, shouldStream = False, functionsIn = None, functionCallIn = None, grammarIn = None):
+    failedCompletions = 0
+    try:
+        completion = openai.ChatCompletion.create(
+            model = modelIn,
+            messages = messagesIn,
+            stream = shouldStream,
+            functions = functionsIn,
+            function_call = functionCallIn,
+            grammar = grammarIn
+        )
+        if shouldStream:
+            return completion
+        else:
+            if functionsIn is None:
+                return completion.choices[0].message.content
+            else:
+                return json.loads(completion.choices[0].message.function_call.arguments)
+    except Exception as e:
+        printOpenAIError(e, failedCompletions)
+        if failedCompletions < 2:
+            failedCompletions += 1
+            time.sleep(3)
+        else:
+            return None
+    return
+
+
 def printOpenAIError(error, iteration):
     if iteration < 2:
         printError("Failed to create completion! Trying again...")
     else:
         printError("Failed to create completion after 3 tries!")
+    printError(str(error))
     if error.json_body is None:
         printError("Failed to read the error!")
         printError("(Are you sure you have the correct address set?)")
