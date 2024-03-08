@@ -145,29 +145,50 @@ def errorBlankEmptyText(sourceIn):
 
 def createOpenAIChatCompletionRequest(modelIn, messagesIn, shouldStream = False, functionsIn = None, functionCallIn = None, grammarIn = None):
     failedCompletions = 0
-    try:
-        completion = openai.ChatCompletion.create(
-            model = modelIn,
-            messages = messagesIn,
-            stream = shouldStream,
-            functions = functionsIn,
-            function_call = functionCallIn,
-            grammar = grammarIn
-        )
-        if shouldStream:
-            return completion
-        else:
-            if functionsIn is None:
-                return completion.choices[0].message.content
+    while True:
+        try:
+            completion = openai.ChatCompletion.create(
+                model = modelIn,
+                messages = messagesIn,
+                stream = shouldStream,
+                functions = functionsIn,
+                function_call = functionCallIn,
+                grammar = grammarIn
+            )
+            if shouldStream:
+                return completion
             else:
-                return json.loads(completion.choices[0].message.function_call.arguments)
-    except Exception as e:
-        printOpenAIError(e, failedCompletions)
-        if failedCompletions < 2:
-            failedCompletions += 1
-            time.sleep(3)
-        else:
-            return None
+                if functionsIn is None:
+                    return completion.choices[0].message.content
+                else:
+                    return json.loads(completion.choices[0].message.function_call.arguments)
+        except Exception as e:
+            printOpenAIError(e, failedCompletions)
+            if failedCompletions < 2:
+                failedCompletions += 1
+                time.sleep(3)
+            else:
+                return None
+    return
+
+
+def createOpenAIImageRequest(modelIn, promptIn, sizeIn):
+    failedCompletions = 0
+    while True:
+        try:
+            completion = openai.Image.create(
+                model = strModelStableDiffusion,
+                prompt = promptIn,
+                size = strImageSize,
+            )
+            return completion.data[0].url
+        except Exception as e:
+            printOpenAIError(e, failedCompletions)
+            if failedCompletions < 2:
+                failedCompletions += 1
+                time.sleep(3)
+            else:
+                return
     return
 
 
