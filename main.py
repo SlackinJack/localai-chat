@@ -47,6 +47,12 @@ def getCurrentModelName():
     return currentModel["model_name"]
 
 
+def resetCurrentModel():
+    global currentModel
+    currentModel = getModelByName(configuration["DEFAULT_MODEL"])
+    return
+
+
 def getCurrentModelSystemPrompt():
     return currentModel["model_system_prompt"]
 
@@ -444,116 +450,112 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
 
 
 def getFunctionResponse(promptIn):
-    tries = 0
     # edit for additional actions later
     actionEnums = [
         "SEARCH_INTERNET_FOR_INFORMATION"
     ]
     todaysDate = datetime.datetime.now().strftime("%A, %B %d, %Y")
     actionEnumsAsString = formatArrayToString(actionEnums, ", or ")
-    while True:
-        if shouldConsiderHistory:
-            promptHistory = getPromptHistory()
-        else:
-            promptHistory = []
-        promptHistory.append(
-            {
-                "role": "system",
-                "content": getCurrentModelSystemPrefixSuffix()[0] + "Create a list of actions that will completed in order to respond to the current conversation. Maximum of " + str(intMaxSearchTerms + 1) + " items." + getCurrentModelSystemPrefixSuffix()[1]
-            }
-        )
-        promptHistory.append(
-            {
-                "role": "user",
-                "content": promptIn,
-            }
-        )
-        printDump("Current prompt for function response:")
-        for obj in promptHistory:
-            printDump(str(obj))
-        failedCompletions = 0
-        functions = [
-            {
-                "name": "function_result",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "actions": {
-                            "type": "array",
-                            # edit for additional actions later
-                            "description": "An array of actions to be completed. Maximum of " + str(intMaxSearchTerms + 1) + " items. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for recent or additional information. Leave blank if there is nothing to do.",
-                            "items": {
-                                "type": "string",
-                                "description": "The action.",
-                                "enum": actionEnums,
-                            },
-                        },
+    if shouldConsiderHistory:
+        promptHistory = getPromptHistory()
+    else:
+        promptHistory = []
+    promptHistory.append(
+        {
+            "role": "system",
+            "content": getCurrentModelSystemPrefixSuffix()[0] + "Create a list of actions that will completed in order to respond to the current conversation. Maximum of " + str(intMaxSearchTerms) + " items." + getCurrentModelSystemPrefixSuffix()[1]
+        }
+    )
+    promptHistory.append(
+        {
+            "role": "user",
+            "content": promptIn,
+        }
+    )
+    printDump("Current prompt for function response:")
+    for obj in promptHistory:
+        printDump(str(obj))
+    failedCompletions = 0
+    functions = [
+        {
+            "name": "function_result",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "actions": {
+                        "type": "array",
                         # edit for additional actions later
-                        "search_terms": {
-                            "type": "array",
-                            "description": "An array of search terms. Use the same number of items as the number of actions.",
-                            "items": {
-                                "type": "string",
-                                "description": "The search term.",
-                            },
+                        "description": "An array of actions to be completed. Maximum of " + str(intMaxSearchTerms) + " items. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for recent or additional information. Leave blank if there is nothing to do.",
+                        "items": {
+                            "type": "string",
+                            "description": "The action.",
+                            "enum": actionEnums,
                         },
                     },
-                    
-                    "required": ["actions", "search_terms"],
-                }
+                    # edit for additional actions later
+                    "search_terms": {
+                        "type": "array",
+                        "description": "An array of search terms. Use the same number of items as the number of actions.",
+                        "items": {
+                            "type": "string",
+                            "description": "The search term.",
+                        },
+                    },
+                },
+                
+                "required": ["actions", "search_terms"],
             }
-        ]
-        
-        function_call = {"name": "function_result"}
-        
-        arguments = createOpenAIChatCompletionRequest(getCurrentModelName(), promptHistory, functionsIn = functions, functionCallIn = function_call)
-        isOnlineResponse = False
-        if arguments is not None and arguments.get("actions") is not None:
-            actions = arguments.get("actions")
-            searchTerms = arguments.get("search_terms")
-            while len(actions) < len(searchTerms):
-                actions.insert(0, "SEARCH_INTERNET_FOR_INFORMATION")
-            i = 0
-            hrefs = []
-            dataCollection = {}
-            for action in actions:
-                if action == "SEARCH_INTERNET_FOR_INFORMATION":
-                    isOnlineResponse = True
-                    if i < len(searchTerms) and i < intMaxSearchTerms - 1:
-                        searchTerm = searchTerms[i]
-                        if searchTerm is not None and len(searchTerm) > 0:
-                            searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
-                            if len(searchResults) > 0:
-                                for key, value in searchResults.items():
-                                    if key not in hrefs:
-                                        hrefs.append(key)
-                                        dataCollection[key] = value
-                                        printDump("Appending search result: [" + key + "] " + value)
-                                    else:
-                                        printDebug("Skipped duplicate source: " + key)
-                            i += 1
-                        else:
-                            break
+        }
+    ]
+    
+    function_call = {"name": "function_result"}
+    
+    resetCurrentModel()
+    arguments = createOpenAIChatCompletionRequest(
+        getCurrentModelName(),
+        promptHistory,
+        functionsIn = functions,
+        functionCallIn = function_call
+    )
+    isOnlineResponse = False
+    dataCollection = {}
+    hrefs = []
+    if arguments is not None and arguments.get("actions") is not None:
+        actions = arguments.get("actions")
+        searchTerms = arguments.get("search_terms")
+        while len(actions) < len(searchTerms):
+            actions.insert(0, "SEARCH_INTERNET_FOR_INFORMATION")
+        i = 0
+        for action in actions:
+            if action == "SEARCH_INTERNET_FOR_INFORMATION":
+                isOnlineResponse = True
+                if i < len(searchTerms) and i < intMaxSearchTerms - 1:
+                    searchTerm = searchTerms[i]
+                    if searchTerm is not None and len(searchTerm) > 0:
+                        searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
+                        if len(searchResults) > 0:
+                            for key, value in searchResults.items():
+                                if key not in hrefs:
+                                    hrefs.append(key)
+                                    dataCollection[key] = value
+                                    printDump("Appending search result: [" + key + "] " + value)
+                                else:
+                                    printDebug("Skipped duplicate source: " + key)
+                        i += 1
                     else:
                         break
                 else:
-                    # edit for additional actions later
                     break
-            break
-        else:
-            if tries < 3:
-                printError("Function generation failed! Trying again...")
-                tries += 1
-                time.sleep(3)
             else:
-                printError("Function generation failed after 3 attempts! Defaulting to chat generation.")
+                # edit for additional actions later
                 break
-    dataBuilder = []
-    for key, value in dataCollection.items():
-        dataBuilder.append("[From " + key + "] " + value)
-    data = []
-    for key, value in dataCollection.items():
-        data.append(value)
+    if len(dataCollection) > 0:
+        dataBuilder = []
+        for key, value in dataCollection.items():
+            dataBuilder.append("[From " + key + "] " + value)
+        data = []
+        for key, value in dataCollection.items():
+            data.append(value)
     if not isOnlineResponse:
         printInfo("This is an offline response!")
         getChatCompletionResponse(promptIn)
