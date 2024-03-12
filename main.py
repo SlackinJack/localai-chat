@@ -569,30 +569,18 @@ def getFunctionResponse(promptIn):
 def getImageResponse(promptIn):
     #TODO: kill stablediffusion if required?
     printInfo("Generating image with prompt: " + promptIn)
-    failedCompletions = 0
-    while True:
-        try:
-            completion = openai.Image.create(
-                model = strModelStableDiffusion,
-                prompt = promptIn,
-                size = strImageSize,
-            )
-            break
-        except Exception as e:
-            printOpenAIError(e, failedCompletions)
-            if failedCompletions < 2:
-                failedCompletions += 1
-                time.sleep(3)
-            else:
-                return
-    theURL = completion.data[0].url
-    split = theURL.split("/")
-    filename = split[len(split) - 1]
-    urllib.request.urlretrieve(theURL, filename)
-    if shouldAutomaticallyOpenFiles:
-        openLocalFile(filename)
-    # TODO: file management
-    return "Your image is available at:\n\n" + completion.data[0].url
+    theURL = createOpenAIImageRequest(strModelStableDiffusion, promptIn, strImageSize)
+    if theURL is not None:
+        split = theURL.split("/")
+        filename = split[len(split) - 1]
+        urllib.request.urlretrieve(theURL, filename)
+        if shouldAutomaticallyOpenFiles:
+            openLocalFile(filename)
+        # TODO: file management
+        return "Your image is available at:\n\n" + completion.data[0].url
+    else:
+        printError("Image creation failed!")
+        return ""
 
 
 def getModelResponse(promptIn):
