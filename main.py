@@ -24,7 +24,7 @@ from modules.utils_web import *
 #### STATIC CONFIGURATION ####
 stopwords = ["<|im_end|>"]
 openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
-strRespondUsingInformation = "Constrict and restrict your response to the following information: "
+strRespondUsingInformation = " Provide a response that is restricted to the facts contained in the following input data: "
 
 
 #### CONFIGURATION LOADER ####
@@ -356,24 +356,6 @@ def function_model(assistant_name):
     return
 
 
-def getChatCompletionGeneric(systemPromptIn, userPromptIn, hasUserInstructions):
-    if hasUserInstructions:
-        userPromptIn = getCurrentModelUserPrefixSuffix()[0] + userPromptIn + getCurrentModelUserPrefixSuffix()[1]
-    
-    messages = [
-        {
-            "role": "system",
-            "content": getCurrentModelSystemPrefixSuffix()[0] + systemPromptIn + getCurrentModelSystemPrefixSuffix()[1]
-        },
-        {
-            "role": "user",
-            "content": userPromptIn
-        },
-    ]
-    
-    return createOpenAIChatCompletionRequest(getCurrentModelName(), messages)
-
-
 def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo = False):
     nextModel = getModelResponse(userPromptIn)
     
@@ -391,7 +373,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         promptHistory.append(
             {
                 "role": "system",
-                "content": getCurrentModelSystemPrefixSuffix()[0] + getCurrentModelSystemPrompt() + "\n" + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n") + getCurrentModelSystemPrefixSuffix()[1],
+                "content": getCurrentModelSystemPrefixSuffix()[0] + getCurrentModelSystemPrompt() + strRespondUsingInformation + "\n" + formatArrayToString(dataIn, "\n\n") + getCurrentModelSystemPrefixSuffix()[1],
             }
         )
     else:
@@ -455,7 +437,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                         sys.stdout.flush()
                         assistantResponse = assistantResponse + letter
         if len(dataIn) > 0 and shouldWriteDataToConvo:
-            writeConversation("SYSTEM: \n" + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n"))
+            writeConversation("SYSTEM: " + strRespondUsingInformation + "\n" + formatArrayToString(dataIn, "\n\n"))
         writeConversation("USER: " + userPromptIn)
         writeConversation("ASSISTANT: " + assistantResponse)
     return
@@ -463,8 +445,8 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
 
 def getFunctionResponse(promptIn):
     tries = 0
+    # edit for additional actions later
     actionEnums = [
-        "REPLY_TO_CONVERSATION",
         "SEARCH_INTERNET_FOR_INFORMATION"
     ]
     todaysDate = datetime.datetime.now().strftime("%A, %B %d, %Y")
@@ -477,7 +459,7 @@ def getFunctionResponse(promptIn):
         promptHistory.append(
             {
                 "role": "system",
-                "content": "You will create a list of actions that will completed in order to respond to the current conversation."
+                "content": getCurrentModelSystemPrefixSuffix()[0] + "Create a list of actions that will completed in order to respond to the current conversation. Maximum of " + str(intMaxSearchTerms + 1) + " items." + getCurrentModelSystemPrefixSuffix()[1]
             }
         )
         promptHistory.append(
@@ -498,17 +480,18 @@ def getFunctionResponse(promptIn):
                     "properties": {
                         "actions": {
                             "type": "array",
-                            "description": "An array of actions to be completed. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for updated resources. Use 'REPLY_TO_CONVERSATION' only as the final action.",
+                            # edit for additional actions later
+                            "description": "An array of actions to be completed. Maximum of " + str(intMaxSearchTerms + 1) + " items. Use 'SEARCH_INTERNET_FOR_INFORMATION' to search for recent or additional information. Leave blank if there is nothing to do.",
                             "items": {
                                 "type": "string",
                                 "description": "The action.",
                                 "enum": actionEnums,
                             },
                         },
-                        
+                        # edit for additional actions later
                         "search_terms": {
                             "type": "array",
-                            "description": "An array of search terms. There should be a maximum of " + str(intMaxSearchTerms + 1) + "items, and the last  item must always be empty.",
+                            "description": "An array of search terms. Use the same number of items as the number of actions.",
                             "items": {
                                 "type": "string",
                                 "description": "The search term.",
@@ -534,30 +517,27 @@ def getFunctionResponse(promptIn):
             hrefs = []
             dataCollection = {}
             for action in actions:
-                if action != "REPLY_TO_CONVERSATION":
-                    if action == "SEARCH_INTERNET_FOR_INFORMATION":
-                        isOnlineResponse = True
-                        if i < len(searchTerms) and i < intMaxSearchTerms - 1:
-                            searchTerm = searchTerms[i]
-                            if searchTerm is not None and len(searchTerm) > 0:
-                                searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
-                                if len(searchResults) > 0:
-                                    for key, value in searchResults.items():
-                                        if key not in hrefs:
-                                            hrefs.append(key)
-                                            dataCollection[key] = value
-                                            printDump("Appending search result: [" + key + "] " + value)
-                                        else:
-                                            printDebug("Skipped duplicate source: " + key)
-                                i += 1
-                            else:
-                                break
+                if action == "SEARCH_INTERNET_FOR_INFORMATION":
+                    isOnlineResponse = True
+                    if i < len(searchTerms) and i < intMaxSearchTerms - 1:
+                        searchTerm = searchTerms[i]
+                        if searchTerm is not None and len(searchTerm) > 0:
+                            searchResults = getSearchResponse(searchTerm, intMaxSources, intMaxSentences)
+                            if len(searchResults) > 0:
+                                for key, value in searchResults.items():
+                                    if key not in hrefs:
+                                        hrefs.append(key)
+                                        dataCollection[key] = value
+                                        printDump("Appending search result: [" + key + "] " + value)
+                                    else:
+                                        printDebug("Skipped duplicate source: " + key)
+                            i += 1
                         else:
                             break
                     else:
-                        # edit for additional actions later
                         break
                 else:
+                    # edit for additional actions later
                     break
             break
         else:
@@ -570,15 +550,15 @@ def getFunctionResponse(promptIn):
                 break
     dataBuilder = []
     for key, value in dataCollection.items():
-        dataBuilder.append("[From " + key + "]" + value)
-    if len(dataBuilder) > 0:
-        writeConversation("SYSTEM:\n" + strRespondUsingInformation + formatArrayToString(dataBuilder, "\n\n"))
+        dataBuilder.append("[From " + key + "] " + value)
     data = []
     for key, value in dataCollection.items():
         data.append(value)
     if not isOnlineResponse:
         printInfo("This is an offline response!")
-    getChatCompletionResponse(promptIn, data, False)
+        getChatCompletionResponse(promptIn)
+    else:
+        getChatCompletionResponse(promptIn, data, True)
     if len(hrefs) > 0:
         printResponse("\n\n\nSources analyzed:\n")
         for h in hrefs:
