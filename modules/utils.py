@@ -1,7 +1,6 @@
 import json
 import openai
 import os
-import psutil
 import random
 import re
 import time
@@ -177,9 +176,9 @@ def createOpenAIImageRequest(modelIn, promptIn, sizeIn):
     while True:
         try:
             completion = openai.Image.create(
-                model = strModelStableDiffusion,
+                model = modelIn,
                 prompt = promptIn,
-                size = strImageSize,
+                size = sizeIn,
             )
             return completion.data[0].url
         except Exception as e:
@@ -194,31 +193,29 @@ def createOpenAIImageRequest(modelIn, promptIn, sizeIn):
 
 def printOpenAIError(error, iteration):
     if iteration < 2:
+        printError("")
         printError("Failed to create completion! Trying again...")
     else:
+        printError("")
         printError("Failed to create completion after 3 tries!")
-    if error.json_body is None:
-        body = str(error)
-        if "111" in body or "Connection refused" in body:
-            printError("(Are you sure you have the correct address set?)")
+    if type(error) is openai.OpenAIError:
+        if error.json_body is None:
+            body = str(error)
+            if "111" in body or "Connection refused" in body:
+                printError("(Are you sure you have the correct address set?)")
+            else:
+                printError(body)
+        else:
+            theError = json.loads(json.dumps(error.json_body["error"]))
+            code = theError["code"]
+            message = theError["message"]
+            printError("(" + str(code) + ": " + message + ")")
     else:
-        theError = json.loads(json.dumps(error.json_body["error"]))
-        code = theError["code"]
-        message = theError["message"]
-        printError("(" + str(code) + ": " + message + ")")
+        printError(str(error))
     return
 
 
-def killLlama():
-    hasResult = False
-    for process in psutil.process_iter():
-        if process.name() == "llama":
-            process.kill()
-            printDebug("llama has been killed off!")
-            hasResult = True
-            time.sleep(1)
-    if not hasResult:
-        printError("Couldn't kill the llama process! Are you on the same machine as LocalAI?")
-        printError("(You can ignore this if llama hasn't been started yet.)")
+def printFormattedJson(jsonIn, printFunc=printDump):
+    printFunc(json.dumps(jsonIn, sort_keys=True, indent=4))
     return
 

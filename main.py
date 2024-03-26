@@ -9,12 +9,11 @@ from difflib import SequenceMatcher
 from modules.file_operations import *
 from modules.file_reader import *
 from modules.utils import *
+from modules.utils_command import *
 from modules.utils_web import *
 
 # TODO:
-# - Restrict output to input information only
 # - Get more resources if the information is too short / insufficient
-# - Code cleanup
 
 #################################################
 ############## BEGIN CONFIGURATION ##############
@@ -94,10 +93,14 @@ def getCurrentModelPrefixSuffixFor(modeIn):
 
 
 ##### MAIN CONFIGURATION #####
-openai.api_base = configuration["ADDRESS"]
+if configuration["ADDRESS"].endswith("/"):
+    openai.api_base = configuration["ADDRESS"] + "v1"
+else:
+    openai.api_base = configuration["ADDRESS"] + "/v1"
 shouldAutomaticallySwitchModels = (configuration["ENABLE_AUTOMATIC_MODEL_SWITCHING"] == "True")
 currentModel = getModelByName(configuration["DEFAULT_MODEL"])
 if currentModel is None:
+    printRed("")
     printRed("Your default model is missing from models.json! Please fix your configuration.")
     exit()
 shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
@@ -211,6 +214,7 @@ def command_clear():
 
 
 def command_settings():
+    printGeneric("")
     printGeneric("Current Settings:\n")
     printGeneric("Model: " + getCurrentModelName())
     printSetting(shouldUseInternet, "Auto Internet Search")
@@ -222,54 +226,62 @@ def command_settings():
 
 
 def command_convo():
+    printGeneric("")
+    printGeneric("Conversations available: ")
+    printGeneric("")
     convoList = []
     for conversation in os.listdir("conversations"):
         if conversation.endswith(".convo"):
             convoList.append(conversation.replace(".convo", ""))
-    printGeneric("Conversations available: ")
     for convo in convoList:
         printGeneric(convo)
+    printGeneric("")
     printSeparator()
     convoName = printInput("Select a conversation to use, create a new one by using an unique name, or leave blank for auto-generated: ")
     printSeparator()
     if len(convoName) == 0:
         convoName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     setConversation(convoName)
+    printGreen("")
     printGreen("Conversation set to: " + convoName)
     return
 
 
 def command_model():
     global currentModel
+    printGeneric("")
     printGeneric("Available models:")
+    printGeneric("")
     for model in fileModelsConfiguration:
         printGeneric(model["model_name"])
+    printGeneric("")
     printSeparator()
     nextModel = printInput("Select a model (leave empty for current '" + getCurrentModelName() + "'): ")
+    printSeparator()
     nextModelObj = None
     if len(nextModel) == 0:
+        printRed("")
         printRed("Keeping current model: " + getCurrentModelName())
     else:
         nextModelObj = getModelByName(nextModel)
         if nextModelObj is None:
+            printRed("")
             printRed("Can't find a match! Keeping current model: " + getCurrentModelName())
         else:
-            if currentModel is not nextModelObj:
-                killLlama()
             currentModel = nextModelObj
-            printSeparator()
+            printGreen("")
             printGreen("Chat model set to: " + getCurrentModelName())
     return
 
 
 def command_sd_model():
     global strModelStableDiffusion
-    printSeparator()
     model = printInput("Select model for Stable Diffusion (leave empty for current '" + strModelStableDiffusion + "'): ")
     if len(model) == 0:
         model = strModelStableDiffusion
     strModelStableDiffusion = model
     printSeparator()
+    printGreen("")
     printGreen("Stable Diffusion model set to: " + model)
     # TODO: kill stablediffusion if required ?
     return
@@ -279,9 +291,16 @@ def command_online():
     global shouldUseInternet
     shouldUseInternet = not shouldUseInternet
     if shouldUseInternet:
+        printGreen("")
         printGreen("Set to online mode!")
     else:
+        printRed("")
         printRed("Set to offline mode!")
+    return
+
+
+def command_curl():
+    sendCurlCommand()
     return
 
 
@@ -289,8 +308,10 @@ def command_history():
     global shouldConsiderHistory
     shouldConsiderHistory = not shouldConsiderHistory
     if shouldConsiderHistory:
+        printGreen("")
         printGreen("Now using chat history in prompts!")
     else:
+        printRed("")
         printRed("Not using chat history in prompts!")
     return
 
@@ -299,14 +320,18 @@ def command_switcher():
     global shouldAutomaticallySwitchModels
     shouldAutomaticallySwitchModels = not shouldAutomaticallySwitchModels
     if shouldAutomaticallySwitchModels:
+        printGreen("")
         printGreen("Now automatically switching models!")
     else:
+        printRed("")
         printRed("Not automatically switching models!")
     return
 
 
 def command_help():
+    printGeneric("")
     printGeneric("Available commands:")
+    printGeneric("")
     printGeneric(" - generate [prompt]")
     for entry, value in commandMap.items():
         commandName = value[0]
@@ -327,6 +352,9 @@ commandMap = {
     ],
     command_convo: [
         "convo",
+    ],
+    command_curl: [
+        "curl",
     ],
     command_settings: [
         "settings",
@@ -368,7 +396,6 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     global currentModel
     if nextModel is not None and nextModel is not currentModel:
         currentModel = nextModel
-        killLlama()
     
     if shouldConsiderHistory:
         promptHistory = getPromptHistory()
@@ -397,12 +424,15 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         }
     )
     
+    printDump("")
     printDump("Current conversation:")
+    printDump("")
     for obj in promptHistory:
         printDump(str(obj))
     
     completion = createOpenAIChatCompletionRequest(getCurrentModelName(), promptHistory, shouldStream = True)
     
+    printResponse("")
     if completion is not None:
         assistantResponse = ""
         potentialStopwords = {}
@@ -472,7 +502,9 @@ def getFunctionResponse(promptIn):
             "content": promptIn,
         }
     )
+    printDump("")
     printDump("Current prompt for function response:")
+    printDump("")
     for obj in promptHistory:
         printDump(str(obj))
     failedCompletions = 0
@@ -495,7 +527,7 @@ def getFunctionResponse(promptIn):
                     # edit for additional actions later
                     "search_terms": {
                         "type": "array",
-                        "description": "An array of search terms. Use the same number of items as the number of actions.",
+                        "description": "An array of search terms. Use the same number of search terms as the number of actions.",
                         "items": {
                             "type": "string",
                             "description": "The search term.",
@@ -508,7 +540,9 @@ def getFunctionResponse(promptIn):
         }
     ]
     
-    function_call = {"name": "function_result"}
+    function_call = {
+        "name": "function_result"
+    }
     
     resetCurrentModel()
     arguments = createOpenAIChatCompletionRequest(
@@ -538,8 +572,10 @@ def getFunctionResponse(promptIn):
                                 if key not in hrefs:
                                     hrefs.append(key)
                                     dataCollection[key] = value
+                                    printDump("")
                                     printDump("Appending search result: [" + key + "] " + value)
                                 else:
+                                    printDebug("")
                                     printDebug("Skipped duplicate source: " + key)
                         i += 1
                     else:
@@ -557,11 +593,13 @@ def getFunctionResponse(promptIn):
         for key, value in dataCollection.items():
             data.append(value)
     if not isOnlineResponse:
+        printInfo("")
         printInfo("This is an offline response!")
         getChatCompletionResponse(promptIn)
     else:
         getChatCompletionResponse(promptIn, data, True)
     if len(hrefs) > 0:
+        printResponse("")
         printResponse("\n\n\nSources analyzed:\n")
         for h in hrefs:
             printResponse(h)
@@ -570,6 +608,7 @@ def getFunctionResponse(promptIn):
 
 def getImageResponse(promptIn):
     #TODO: kill stablediffusion if required?
+    printInfo("")
     printInfo("Generating image with prompt: " + promptIn)
     theURL = createOpenAIImageRequest(strModelStableDiffusion, promptIn, strImageSize)
     if theURL is not None:
@@ -581,7 +620,9 @@ def getImageResponse(promptIn):
         # TODO: file management
         return "Your image is available at:\n\n" + completion.data[0].url
     else:
+        printError("")
         printError("Image creation failed!")
+        printError("")
         return ""
 
 
@@ -611,11 +652,14 @@ Consider the following descriptions of each model:
                 "content": promptIn
             }
         )
+        printDump("")
         printDump("Current prompt for model response:")
         for obj in promptMessage:
             printDump(str(obj))
+        printDump("")
         printDump("Choices: " + grammarStringBuilder)
         nextModel = createOpenAIChatCompletionRequest(getCurrentModelName(), promptMessage, grammarIn = grammarStringBuilder)
+        printDump("")
         printDebug("Next model: " + nextModel)
         return getModelByName(nextModel)
 
@@ -635,6 +679,7 @@ def handlePrompt(promptIn):
             if shouldUseInternet:
                 getFunctionResponse(promptIn)
             else:
+                printInfo("")
                 printInfo("You have disabled automatic internet searching! Generating offline response.")
                 getChatCompletionResponse(promptIn)
     return
@@ -646,6 +691,7 @@ def checkCommands(promptIn):
             if strPrompt == v:
                 key()
                 return True
+    printDebug("")
     printDebug("No commands detected.")
     return False
 
@@ -659,6 +705,7 @@ def checkTriggers(promptIn):
                 potentialTriggers[key] = matchPercentage
     if len(potentialTriggers) == 1:
         for key, value in potentialTriggers.items():
+            printDebug("")
             printDebug("Calling trigger: " + str(key))
             key(promptIn)
             return True
@@ -676,9 +723,11 @@ def checkTriggers(promptIn):
         if triggerToCall is None:
             return False
         else:
+            printDebug("")
             printDebug("Calling trigger: " + str(triggerToCall))
             triggerToCall(promptIn)
             return True
+    printDebug("")
     printDebug("No triggers detected.")
     return False
 

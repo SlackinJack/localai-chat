@@ -1,7 +1,6 @@
 docx2txt
 duckduckgo_search
 openai==0.28.0
-psutil
 pydub
 PyPDF2
 python-pptx

@@ -3,7 +3,7 @@
 **Working: enough for me**
 
 
-Very barebones & basic front-end for LocalAI written in Python3
+Very basic CLI tool for LocalAI, written in Python3
 
 
 *Please Note:*
@@ -24,6 +24,7 @@ Goals are only "nice to haves".
 - Auto-switch models on-the-fly
 - Text-streaming for outputs
 - Reply to conversations, load previous conversations and continue them
+- Send preconfigured/custom cURL commands
 
 
 ## Current dependencies:
@@ -42,12 +43,12 @@ Goals are only "nice to haves".
 
 ## Test environment:
 - Ubuntu Server 22.04
-- NVidia Quadro P2000 5GB, Cuda 12.3
-- 2x Xeon X5650
+- ~~Nvidia Tesla M40 24GB, Cuda 12.4~~
+- 2x Xeon E5-2660 v3
 - Python 3.10
 - Model(s):
-    - CatPPT-base-Mistral-7B-Instruct-v0.1.Q3_K_S
-    - mistral-7b-instruct-v0.2-code-ft.Q3_K_S
-    - samantha-mistral-7b-Mistral-7B-Instruct-v0.1.Q3_K_S
-- LocalAI 1.40.0 (main), LocalAI 2.5.1 (occasionally tested)
+    - CatPPT-base-Mistral-7B-Instruct-v0.1.Q5_K_S.gguf
+    - speechless-code-mistral-7b-v1.0.Q5_K_S.gguf
+    - samantha-1.2-mistral-7b-Q5_K_S.gguf
+- LocalAI 2.10.1
 
