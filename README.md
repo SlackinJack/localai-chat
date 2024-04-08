@@ -3,14 +3,14 @@
 **Working: enough for me**
 
 
-Very basic CLI tool for LocalAI, written in Python3
+Very basic CLI chatbot for LocalAI, written in Python3.
 
 
 *Please Note:*
 
-This was created for specific personal tasks.
+This project was created for specific personal tasks.
 
-(For now) it will only be updated according to my needs, and adjusted to the environment I am using this in.
+It will only be adjusted to the environment that I am using this in.
 
 Goals are only "nice to haves".
 
@@ -32,23 +32,28 @@ Goals are only "nice to haves".
 
 
 ## Setup:
-- Use a completion chat template for your models.
+- Use a completion template for your models, e.g.:
 
+```
+{{.Input}}
+<|im_start|>assistant
+```
 
-## Road map and targets:
-- (???) output files
-- (???) directly edit files
-- (lowest priority) main.py > triggers > openFile > support other OS
+## Planned feature priorities:
+- (med) write new files
+- (low) edit existing files
+- (very low) file operations --> support other OS
 
 
 ## Test environment:
 - Ubuntu Server 22.04
-- ~~Nvidia Tesla M40 24GB, Cuda 12.4~~
+- Nvidia Tesla M40 24GB, Cuda 12.4
 - 2x Xeon E5-2660 v3
-- Python 3.10
+- Python 3.10.12
 - Model(s):
-    - CatPPT-base-Mistral-7B-Instruct-v0.1.Q5_K_S.gguf
-    - speechless-code-mistral-7b-v1.0.Q5_K_S.gguf
-    - samantha-1.2-mistral-7b-Q5_K_S.gguf
-- LocalAI 2.10.1
+    - codellama-13b-instruct.Q4_K_S.gguf
+    - Nous-Hermes-13B.Q4_K_M.gguf
+    - samantha-1.2-mistral-7b-Q5_K_M.gguf
+    - stable-diffusion-v1-5
+- LocalAI 2.10.2, LocalAI 1.40.0 (occasionally tested)
 

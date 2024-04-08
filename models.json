@@ -1,8 +1,8 @@
 [
     {
-        "model_name": "cat-7b",
-        "model_enabled": false,
-        "model_description": "Cat is a general-purpose assistant.",
+        "model_name": "nous-13b",
+        "model_switchable": true,
+        "model_description": "Nous is a general-purpose assistant.",
         "model_system_prompt": "You are a helpful English virtual assistant. You will reply to the current conversation.",
         "model_system_prefix": "<|im_start|>system\n",
         "model_system_suffix": "<|im_end|>",
@@ -10,10 +10,10 @@
         "model_user_suffix": "<|im_end|>"
     },
     {
-        "model_name": "code-7b",
-        "model_enabled": true,
+        "model_name": "code-13b",
+        "model_switchable": true,
         "model_description": "Code is an assistant who is trained for programming, code and coding, software development.",
-        "model_system_prompt": "Complete the given task. Implement proper formatting. Respond with only your code. Assume the user is an experienced programmer.",
+        "model_system_prompt": "Complete the given task. Implement proper formatting. Respond with only your code.",
         "model_system_prefix": "<|im_start|>system\n",
         "model_system_suffix": "<|im_end|>",
         "model_user_prefix": "<|im_start|>user\n",
@@ -21,8 +21,8 @@
     },
     {
         "model_name": "samantha-7b",
-        "model_enabled": true,
-        "model_description": "Samantha is an assistant who is trained for philosophy, psychology, personal relationships.",
+        "model_switchable": true,
+        "model_description": "Samantha is an assistant who is trained for philosophy and personal relationships.",
         "model_system_prompt": "You are Samantha, a helpful English virtual assistant. You will reply to the current conversation.",
         "model_system_prefix": "<|im_start|>system\n",
         "model_system_suffix": "<|im_end|>",

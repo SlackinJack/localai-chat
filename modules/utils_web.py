@@ -38,34 +38,38 @@ def searchDDG(keywords, maxSources):
             for result in DDGS().text(keywords, max_results=maxSources):
                 hrefs.append(result.get("href"))
             break
-        except:
+        except Exception as e:
             if tries >= 2:
                 printError("Couldn't load DuckDuckGo after 3 tries! Aborting search.")
+                printError("(" + str(e) + ")")
                 return ""
             else:
                 printError("Exception thrown while searching DuckDuckGo, trying again in 10 seconds...")
+                printError("(" + str(e) + ")")
                 time.sleep(10)
                 tries += 1
     return hrefs
 
 
 jsErrors = [
-        "JavaScript",
-        "JS",
-        "enable",
-        "is not supported",
-        "another browser",
-        "supported browser",
+    "JavaScript",
+    "JS",
+    "enable",
+    "is not supported",
+    "another browser",
+    "supported browser",
+    "without",
 ]
 
 blockedErrors = [
-        "Access Denied",
-        "Access forbidden",
-        "Please contact the site",
-        "You don't have permission to access",
-        "403 - Forbidden", "Access to this page is forbidden",
-        "Why have I been blocked?",
-        "This website is using a security service to protect itself from online attacks.",
+    "Access Denied",
+    "Access forbidden",
+    "Please contact the site",
+    "You don't have permission to access",
+    "403 - Forbidden",
+    "Access to this page is forbidden",
+    "Why have I been blocked?",
+    "This website is using a security service to protect itself from online attacks.",
 ]
 
 def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
@@ -112,6 +116,7 @@ def getYouTubeCaptions(videoIdIn):
             for key, value in s.items():
                 if key == "text":
                     captionStringBuilder += value + " "
+        captionStringBuilder = captionStringBuilder.replace("\xa0", "")
         printDump("Video captions: " + captionStringBuilder)
         return captionStringBuilder
     except Exception as e:

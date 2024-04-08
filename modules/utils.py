@@ -90,7 +90,7 @@ def cleanupString(stringIn):
 
 
 def getFilePathFromPrompt(stringIn):
-    return (re.findall(r"'(.*?)'", stringIn, re.DOTALL))[0]
+    return (re.findall(r"'(.*?)'", stringIn, re.DOTALL))
 
 
 def trimTextBySentenceLength(textIn, maxLength):
