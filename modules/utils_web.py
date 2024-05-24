@@ -1,10 +1,13 @@
+import concurrent.futures
 import re
 import requests
 import time
 
+
 from duckduckgo_search import DDGS
 from readability import Document
 from youtube_transcript_api import YouTubeTranscriptApi
+
 
 from modules.utils import *
 
@@ -15,16 +18,18 @@ from modules.utils import *
 
 
 def getSearchResponse(keywords, maxSources, maxSentences):
-    printDebug("Search term(s):\n" + keywords)
     searchResults = {} #href, text
-    sources = searchDDG(keywords, maxSources)
-    printDebug("Target links:")
-    for href in sources:
-        printDebug("   - " + href)
-    for href in sources:
-        websiteText = getInfoFromWebsite(href, False, maxSentences)
-        if len(websiteText) > 0:
-            searchResults[href] = websiteText
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        printDebug("Search term(s):\n" + keywords)
+        sources = searchDDG(keywords, maxSources)
+        printDebug("Target links:")
+        for href in sources:
+            printDebug("   - " + href)
+            futures.append(executor.submit(getInfoFromWebsite, websiteIn = href, bypassLength = False, maxSentences = maxSentences))
+        for future in concurrent.futures.as_completed(futures):
+            res = future.result()
+            searchResults[res[0]] = res[1]
     if len(searchResults) == 0:
         printError("No sources were compiled!")
     return searchResults
@@ -44,9 +49,9 @@ def searchDDG(keywords, maxSources):
                 printError("(" + str(e) + ")")
                 return ""
             else:
-                printError("Exception thrown while searching DuckDuckGo, trying again in 10 seconds...")
+                printError("Exception thrown while searching DuckDuckGo, trying again in 5 seconds...")
                 printError("(" + str(e) + ")")
-                time.sleep(10)
+                time.sleep(5)
                 tries += 1
     return hrefs
 
@@ -54,11 +59,9 @@ def searchDDG(keywords, maxSources):
 jsErrors = [
     "JavaScript",
     "JS",
-    "enable",
     "is not supported",
     "another browser",
     "supported browser",
-    "without",
 ]
 
 blockedErrors = [
@@ -67,6 +70,7 @@ blockedErrors = [
     "Please contact the site",
     "You don't have permission to access",
     "403 - Forbidden",
+    "403 Forbidden",
     "Access to this page is forbidden",
     "Why have I been blocked?",
     "This website is using a security service to protect itself from online attacks.",
@@ -81,7 +85,7 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
             raise Exception("Status code is not 200.")
     except:
         printError("Failed to load the website!")
-        return ""
+        return [websiteIn, ""]
     reader = Document(website.content)
     websiteText = reader.summary()
     websiteText = re.sub('<[^<]+?>', '', websiteText)
@@ -93,15 +97,15 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
             matchJS += 1
     if matchJS >= 3:
         printError("Website failed JS test!")
-        return ""
+        return [websiteIn, ""]
     for e in blockedErrors:
         if e in websiteText:
             printError("Website failed error test!")
-            return ""
+            return [websiteIn, ""]
     if not bypassLength and maxSentences > 0:
-        return trimTextBySentenceLength(websiteText, maxSentences)
+        return [websiteIn, trimTextBySentenceLength(websiteText, maxSentences)]
     else:
-        return websiteText
+        return [websiteIn, websiteText]
 
 
 def getYouTubeCaptions(videoIdIn):
@@ -111,7 +115,7 @@ def getYouTubeCaptions(videoIdIn):
         printDebug("Video ID: " + videoIdIn)
         srt = YouTubeTranscriptApi.get_transcript(videoIdIn, languages=[defaultLanguageCode])
         if YouTubeTranscriptApi.list_transcripts(videoIdIn).find_transcript([defaultLanguageCode]).is_generated:
-            printInfo("Heads up! It seems like this transcript is auto-generated - it may not be 100% correct!")
+            printInfo("This transcript is auto-generated - it may not be correct.")
         for s in srt:
             for key, value in s.items():
                 if key == "text":
@@ -126,5 +130,5 @@ def getYouTubeCaptions(videoIdIn):
             return disabledText + "!"
         else:
             printError(str(e))
-            return "An error occured while obtaining the captions for this video!"
+            return "An error occured while obtaining the captions for this video."
 

@@ -5,6 +5,7 @@ import random
 import re
 import time
 
+
 from termcolor import colored
 # https://pypi.org/project/termcolor/
 
@@ -21,7 +22,8 @@ def initConfig(fileConfiguration):
 
 
 def printInput(string):
-    strInput = input(colored(string, "white", attrs=["bold"]))
+    strInput = input(string)
+    #strInput = input(colored(string, "white", attrs=["bold"]))
     return strInput
 
 

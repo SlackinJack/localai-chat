@@ -5,9 +5,11 @@ import speech_recognition
 import subprocess
 import sys
 
+
 from pptx import Presentation
 from pydub import AudioSegment
 from PyPDF2 import PdfReader
+
 
 from modules.file_operations import *
 from modules.utils import *
