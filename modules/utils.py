@@ -159,10 +159,16 @@ def createOpenAIChatCompletionRequest(modelIn, messagesIn, shouldStream = False,
             if shouldStream:
                 return completion
             else:
+                message = completion.choices[0].message
                 if functionsIn is None:
-                    return completion.choices[0].message.content
+                    return message.content
                 else:
-                    return json.loads(completion.choices[0].message.function_call.arguments)
+                    try:
+                        if message.function_call is not None and message.function_call.arguments is not None:
+                            return json.loads(message.function_call.arguments)
+                    except Exception as e:
+                        arguments = json.loads(message.content.replace("</s>", ""))
+                        return arguments["arguments"]
         except Exception as e:
             printOpenAIError(e, failedCompletions)
             if failedCompletions < 2:

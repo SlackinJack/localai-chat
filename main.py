@@ -21,7 +21,7 @@ from modules.utils_web import *
 # - rework convo names to be easier to type, autocompletion
 # - clean code
 # - async web fetch
-# - "catch" forbidden response words "<im_start>system", etc.
+# - catch and skip forbidden response words "<im_start>system", etc.
 
 
 #################################################
@@ -30,7 +30,7 @@ from modules.utils_web import *
 
 
 #### STATIC CONFIGURATION ####
-stopwords = ["<|im_end|>"]
+stopwords = ["<|im_end|>", "<|im_end"]
 openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
 strRespondUsingInformation = " Provide a response that is restricted to the information contained in the following input data: "
 strDetermineBestAssistant = "Use the following descriptions of each assistant to determine the assistant with the most relevant skills related to the task given by USER: "
@@ -415,36 +415,36 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     
     printResponse("")
     if completion is not None:
-        assistantResponse = ""
+        assistantResponse = pausedLetters = ""
         potentialStopwords = {}
         stop = False
-        pausedLetters = ""
         tic = toc = time.perf_counter()
-        while not stop and (toc - tic < intResponseTimeout):
+        while (toc - tic) < intResponseTimeout:
             toc = time.perf_counter()
             for chunk in completion:
                 letter = chunk.choices[0].delta.content
                 if letter is not None:
-                    pause = False
-                    hasAdded = False
+                    pause = hasAdded = False
                     # check stop words
                     for stopword in stopwords:
                         if stopword.startswith(letter):
                             potentialStopwords[stopword] = 1
                             pausedLetters += letter
-                            hasAdded = True
-                            pause = True
+                            hasAdded = pause = True
+                            break
                     # check current stop words
                     for stopword, index in potentialStopwords.items():
                         if index > 1 or not hasAdded:
                             if index >= len(stopword):
                                 stop = True
+                                break
                             elif stopword[index] == letter:
                                 potentialStopwords[stopword] = index + 1
                                 pausedLetters += letter
                                 pause = True
                                 if index >= len(stopword) - 1:
                                     stop = True
+                                    break
                     if not pause and not stop:
                         if len(pausedLetters) > 0:
                             printResponse(pausedLetters, "")
@@ -454,6 +454,9 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                         time.sleep(0.005)
                         sys.stdout.flush()
                         assistantResponse = assistantResponse + letter
+                    elif stop:
+                        break # chunk iteration
+                        break # while loop
         printResponse("")
         if len(dataIn) > 0 and shouldWriteDataToConvo:
             writeConversation("SYSTEM: " + strRespondUsingInformation + "\n" + formatArrayToString(dataIn, "\n\n"))
@@ -463,9 +466,8 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
 
 
 def getFunctionResponse(promptIn):
-    # new format:
-    # ask the AI to make a list of actions to be completed in order to complete the task
     actionEnums = ["SEARCH_INTERNET_WITH_SEARCH_TERM"] # APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
+    # for file operations, catch "dangerous" actions (edit system files, etc.)
     
     function = [
         {
@@ -475,14 +477,17 @@ def getFunctionResponse(promptIn):
                 "properties": {
                     "actions_dictionary": {
                         "type": "array",
-                        "description": "Generate an array of additional actions that need to be completed prior to responding to the prompt. Duplicate actions are allowed, only if the input data is different. If no actions are required, generate an empty array.",
+                        "description": "Generate an order-sensitive array of additional actions that need to be completed." +
+                            " Duplicate actions are allowed, only when the input data is distinctly different in each action." +
+                            " You are encouraged to generate multiple specific actions for each topic or action in the prompt." +
+                            " If you are ready to respond without using any additional actions, generate an empty array.",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "action": {
                                     "type": "string",
                                     "description": "The action to be completed." +
-                                        " Use 'SEARCH_INTERNET_WITH_SEARCH_TERM', with a short and descriptive search term, to search for recent or additional information.",
+                                        " Use 'SEARCH_INTERNET_WITH_SEARCH_TERM', to search for only one specific topic.",
                                     "enum": actionEnums,
                                 },
                                 "action_input_data": {
@@ -532,7 +537,6 @@ def getFunctionResponse(promptIn):
     searchedTerms = []
     datas = []
     
-    #while True:
     dataPrompt = []
     if len(datas) > 0:
         dataPrompt = [
@@ -562,28 +566,34 @@ def getFunctionResponse(promptIn):
             match theAction:
                 case "SEARCH_INTERNET_WITH_SEARCH_TERM":
                     if len(theActionInputData) > 0:
+                        theActionInputData = theActionInputData.lower()
                         if not theActionInputData in searchedTerms:
                             searchedTerms.append(theActionInputData)
-                            searchResults = getSearchResponse(theActionInputData, intMaxSourcesPerSearch, intMaxSentencesPerSource)
-                            if len(searchResults) > 0:
-                                for key, value in searchResults.items():
-                                    if key not in hrefs:
+                            searchResultSources = getSourcesResponse(theActionInputData, intMaxSourcesPerSearch)
+                            nonDuplicateHrefs = []
+                            for href in searchResultSources:
+                                if href not in hrefs:
+                                    nonDuplicateHrefs.append(href)
+                                else:
+                                    printDebug("Skipped duplicate source: " + key)
+                            if len(nonDuplicateHrefs) > 0:
+                                searchResults = getSourcesTextAsync(nonDuplicateHrefs, intMaxSentencesPerSource)
+                                if len(searchResults) > 0:
+                                    for key, value in searchResults.items():
                                         hrefs.append(key)
                                         datas.append(value)
-                                        printDebug("\nAppended source data: " + key)
-                                    else:
-                                        printDebug("\nSkipped duplicate source: " + key)
+                                        printDebug("Appended source data: " + key)
+                                else:
+                                    printError("\nNo search results with this search term.")
                             else:
-                                printError("\nNo search results with this search term.")
+                                printDebug("All target links are duplicates!")
+                                printDebug("Skipping this search.")
                         else:
-                            #TODO: allow for search term retry
-                            printError("\nDuplicated search term: " + theActionInputData)
-                            printError("Breaking out of loop.")
-                            break
+                            printError("\nSkipping duplicated search term: " + theActionInputData)
                     else:
                         printError("\nNo search term provided.")
                 case _:
-                    printError("\nUnsupported action: " + action)
+                    printError("\nUnrecognized action: " + action)
                     printError("Breaking out of loop.")
                     break
     else:

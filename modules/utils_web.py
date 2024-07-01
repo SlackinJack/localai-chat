@@ -17,19 +17,32 @@ from modules.utils import *
 ##################################################
 
 
-def getSearchResponse(keywords, maxSources, maxSentences):
+def getSourcesResponse(keywords, maxSources):
+    printDebug("")
+    printDebug("Search term(s):\n" + keywords)
+    return searchDDG(keywords, maxSources)
+
+
+def getSourcesTextAsync(hrefs, maxSentences):
     searchResults = {} #href, text
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
-        printDebug("Search term(s):\n" + keywords)
-        sources = searchDDG(keywords, maxSources)
+        printDebug("")
         printDebug("Target links:")
-        for href in sources:
+        for href in hrefs:
             printDebug("   - " + href)
-            futures.append(executor.submit(getInfoFromWebsite, websiteIn = href, bypassLength = False, maxSentences = maxSentences))
+            futures.append(
+                executor.submit(
+                    getInfoFromWebsite,
+                    websiteIn = href,
+                    bypassLength = False,
+                    maxSentences = maxSentences
+                )
+            )
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
-            searchResults[res[0]] = res[1]
+            if not checkEmptyString(res[1]):
+                searchResults[res[0]] = res[1]
     if len(searchResults) == 0:
         printError("No sources were compiled!")
     return searchResults
@@ -84,7 +97,7 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
         if website.status_code != 200:
             raise Exception("Status code is not 200.")
     except:
-        printError("Failed to load the website!")
+        printError("Failed to load the website. (" + websiteIn + ")")
         return [websiteIn, ""]
     reader = Document(website.content)
     websiteText = reader.summary()
@@ -96,15 +109,17 @@ def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
         if s in websiteText:
             matchJS += 1
     if matchJS >= 3:
-        printError("Website failed JS test!")
+        printError("Website failed JS test. (" + websiteIn + ")")
         return [websiteIn, ""]
     for e in blockedErrors:
         if e in websiteText:
-            printError("Website failed error test!")
+            printError("Website failed error test. (" + websiteIn + ")")
             return [websiteIn, ""]
     if not bypassLength and maxSentences > 0:
+        printDebug("Fetched trimmed text from: " + websiteIn)
         return [websiteIn, trimTextBySentenceLength(websiteText, maxSentences)]
     else:
+        printDebug("Fetched text from: " + websiteIn)
         return [websiteIn, websiteText]
 
 
