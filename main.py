@@ -17,10 +17,8 @@ from modules.utils_web import *
 
 
 # TODO:
-# - Navigate to a link automatically if it is linked in a source (eg. input file)
 # - rework convo names to be easier to type, autocompletion
 # - clean code
-# - async web fetch
 # - catch and skip forbidden response words "<im_start>system", etc.
 
 
@@ -30,9 +28,9 @@ from modules.utils_web import *
 
 
 #### STATIC CONFIGURATION ####
-stopwords = ["<|im_end|>", "<|im_end"]
+stopwords = ["<|im_e", "\n\n\n\n\n"]
 openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
-strRespondUsingInformation = " Provide a response that is restricted to the information contained in the following input data: "
+strRespondUsingInformation = "Provide a response that is restricted to the information contained in the following input data: "
 strDetermineBestAssistant = "Use the following descriptions of each assistant to determine the assistant with the most relevant skills related to the task given by USER: "
 
 #### CONFIGURATION LOADER ####
@@ -42,7 +40,6 @@ initConfig(fileConfiguration)
 
 ####### MODELS LOADER #######
 fileModelsConfiguration = json.loads(readFile("", "models.json"))
-
 
 def getModelByName(modelNameIn):
     for model in fileModelsConfiguration:
@@ -81,24 +78,6 @@ def getEnabledModelDescriptions():
                 out += " "
             out += model["model_description"]
     return out
-
-
-def getCurrentModelSystemPrefixSuffix():
-    return getCurrentModelPrefixSuffixFor("system")
-
-
-def getCurrentModelUserPrefixSuffix():
-    return getCurrentModelPrefixSuffixFor("user")
-
-
-def getCurrentModelPrefixSuffixFor(modeIn):
-    prefix = currentModel["model_" + modeIn + "_prefix"]
-    suffix = currentModel["model_" + modeIn + "_suffix"]
-    if prefix is None:
-        prefix = ""
-    if suffix is None:
-        suffix = ""
-    return [prefix, suffix]
 
 
 ##### MAIN CONFIGURATION #####
@@ -192,6 +171,7 @@ def trigger_openFile(promptIn):
     promptWithoutFilePaths = promptIn
     filePaths = getFilePathFromPrompt(promptIn)
     fileContents = []
+    detectedWebsites = []
     for filePath in filePaths:
         fullFileName = filePath.split("/")
         fileName = fullFileName[len(fullFileName) - 1]
@@ -199,7 +179,25 @@ def trigger_openFile(promptIn):
         fileContent = getFileContents(filePath)
         if checkEmptyString(fileContent):
             fileContent = errorBlankEmptyText("file")
+        else:
+            words = fileContent.split("http")
+            endHttpLetters = " )]}>"
+            for word in words:
+                if word.startswith("://") or word.startswith("s://"):
+                    linkBuilder = "http"
+                    for letter in word:
+                        if letter not in endHttpLetters:
+                            linkBuilder += letter
+                        else:
+                            detectedWebsites.append(linkBuilder)
+                            break
         fileContents.append("File: '" + fileName + "': " + fileContent)
+        if len(detectedWebsites) > 0:
+            for website in detectedWebsites:
+                websiteText = getInfoFromWebsite(website, True)[1]
+                if not checkEmptyString(websiteText):
+                    printDebug("Retrieved text from " + website + ": " + websiteText)
+                    fileContents.append("Website in file: '" + website + "': " + websiteText)
     getChatCompletionResponse(promptWithoutFilePaths, fileContents, True)
     return
 
@@ -381,29 +379,21 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         promptHistory.append(
             {
                 "role": "system",
-                "content": getCurrentModelSystemPrefixSuffix()[0] +
-                    getCurrentModelSystemPrompt() +
-                    strRespondUsingInformation + "\n" +
-                    formatArrayToString(dataIn, "\n\n") +
-                    getCurrentModelSystemPrefixSuffix()[1],
+                "content": getCurrentModelSystemPrompt() + strRespondUsingInformation + "\n" + formatArrayToString(dataIn, "\n\n")
             }
         )
     else:
         promptHistory.append(
             {
                 "role": "system",
-                "content": getCurrentModelSystemPrefixSuffix()[0] +
-                    getCurrentModelSystemPrompt() +
-                    getCurrentModelSystemPrefixSuffix()[1],
+                "content": getCurrentModelSystemPrompt()
             }
         )
     
     promptHistory.append(
         {
             "role": "user",
-            "content": getCurrentModelUserPrefixSuffix()[0] +
-                userPromptIn +
-                getCurrentModelUserPrefixSuffix()[1],
+            "content": userPromptIn
         }
     )
     
@@ -466,7 +456,12 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
 
 
 def getFunctionResponse(promptIn):
-    actionEnums = ["SEARCH_INTERNET_WITH_SEARCH_TERM"] # APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
+    actionEnums = [
+        "SEARCH_INTERNET_WITH_SEARCH_TERM",
+        "GENERATE_IMAGE_WITH_DESCRIPTION"
+    ]
+    # TODO:
+    # APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
     # for file operations, catch "dangerous" actions (edit system files, etc.)
     
     function = [
@@ -487,7 +482,8 @@ def getFunctionResponse(promptIn):
                                 "action": {
                                     "type": "string",
                                     "description": "The action to be completed." +
-                                        " Use 'SEARCH_INTERNET_WITH_SEARCH_TERM', to search for only one specific topic.",
+                                        " Use 'SEARCH_INTERNET_WITH_SEARCH_TERM', to search for only one specific topic." + 
+                                        " Use 'GENERATE_IMAGE_WITH_DESCRIPTION', to create an artificial image for the user.",
                                     "enum": actionEnums,
                                 },
                                 "action_input_data": {
@@ -519,11 +515,9 @@ def getFunctionResponse(promptIn):
     prompt = [
         {
             "role": "system",
-            "content": getCurrentModelSystemPrefixSuffix()[0] +
-                "You are a helpful assistant." +
+            "content": "You are a helpful assistant." +
                 " You will respond accurately and factually." +
-                " Use the conversation as context, only when it is relevant to the newest prompt." +
-                getCurrentModelSystemPrefixSuffix()[1]
+                " Use the conversation as context, only when it is relevant to the newest prompt."
         },
         {
             "role": "user",
@@ -542,10 +536,7 @@ def getFunctionResponse(promptIn):
         dataPrompt = [
             {
                 "role": "system",
-                "content": getCurrentModelSystemPrefixSuffix()[0] +
-                    strRespondUsingInformation + "\n" +
-                    formatArrayToString(datas, "\n\n") +
-                    getCurrentModelSystemPrefixSuffix()[1],
+                "content": strRespondUsingInformation + "\n" + formatArrayToString(datas, "\n\n")
             }
         ]
     fullPrompt = dataPrompt + promptHistory + prompt
@@ -565,33 +556,39 @@ def getFunctionResponse(promptIn):
             theActionInputData = action.get("action_input_data")
             match theAction:
                 case "SEARCH_INTERNET_WITH_SEARCH_TERM":
-                    if len(theActionInputData) > 0:
-                        theActionInputData = theActionInputData.lower()
-                        if not theActionInputData in searchedTerms:
-                            searchedTerms.append(theActionInputData)
-                            searchResultSources = getSourcesResponse(theActionInputData, intMaxSourcesPerSearch)
-                            nonDuplicateHrefs = []
-                            for href in searchResultSources:
-                                if href not in hrefs:
-                                    nonDuplicateHrefs.append(href)
-                                else:
-                                    printDebug("Skipped duplicate source: " + key)
-                            if len(nonDuplicateHrefs) > 0:
-                                searchResults = getSourcesTextAsync(nonDuplicateHrefs, intMaxSentencesPerSource)
-                                if len(searchResults) > 0:
-                                    for key, value in searchResults.items():
-                                        hrefs.append(key)
-                                        datas.append(value)
-                                        printDebug("Appended source data: " + key)
-                                else:
-                                    printError("\nNo search results with this search term.")
-                            else:
-                                printDebug("All target links are duplicates!")
-                                printDebug("Skipping this search.")
-                        else:
-                            printError("\nSkipping duplicated search term: " + theActionInputData)
+                    if not shouldUseInternet:
+                        printDebug("Internet is disabled, skipping this action.")
                     else:
-                        printError("\nNo search term provided.")
+                        if len(theActionInputData) > 0:
+                            theActionInputData = theActionInputData.lower()
+                            if not theActionInputData in searchedTerms:
+                                searchedTerms.append(theActionInputData)
+                                searchResultSources = getSourcesResponse(theActionInputData, intMaxSourcesPerSearch)
+                                nonDuplicateHrefs = []
+                                for href in searchResultSources:
+                                    if href not in hrefs:
+                                        nonDuplicateHrefs.append(href)
+                                    else:
+                                        printDebug("Skipped duplicate source: " + key)
+                                if len(nonDuplicateHrefs) > 0:
+                                    searchResults = getSourcesTextAsync(nonDuplicateHrefs, intMaxSentencesPerSource)
+                                    if len(searchResults) > 0:
+                                        for key, value in searchResults.items():
+                                            hrefs.append(key)
+                                            datas.append(value)
+                                            printDebug("Appended source data: " + key)
+                                    else:
+                                        printError("\nNo search results with this search term.")
+                                else:
+                                    printDebug("All target links are duplicates!")
+                                    printDebug("Skipping this search.")
+                            else:
+                                printError("\nSkipping duplicated search term: " + theActionInputData)
+                        else:
+                            printError("\nNo search term provided.")
+                case "GENERATE_IMAGE_WITH_DESCRIPTION":
+                    printDebug("Generating image with description: " + theActionInputData)
+                    getImageResponse(theActionInputData)
                 case _:
                     printError("\nUnrecognized action: " + action)
                     printError("Breaking out of loop.")
@@ -613,7 +610,6 @@ def getFunctionResponse(promptIn):
 
 
 def getImageResponse(promptIn):
-    #TODO: kill stablediffusion if required?
     printInfo("\nGenerating image with prompt: " + promptIn)
     theURL = createOpenAIImageRequest(strModelStableDiffusion, promptIn, strImageSize)
     if theURL is not None:
@@ -671,11 +667,7 @@ def handlePrompt(promptIn):
     if checkCommands(promptIn) == False:
         if checkTriggers(promptIn) == False:
             tic = time.perf_counter()
-            if shouldUseInternet:
-                getFunctionResponse(promptIn)
-            else:
-                printInfo("\nYou have disabled automatic internet searching! Generating offline response.")
-                getChatCompletionResponse(promptIn)
+            getFunctionResponse(promptIn)
             toc = time.perf_counter()
             printDebug(f"\n\n{toc - tic:0.3f} seconds")
             printGeneric("")
