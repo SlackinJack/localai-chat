@@ -23,7 +23,6 @@ def initConfig(fileConfiguration):
 
 def printInput(string):
     strInput = input(string)
-    #strInput = input(colored(string, "white", attrs=["bold"]))
     return strInput
 
 
@@ -76,11 +75,34 @@ def printSeparator():
     return
 
 
+def addToPrompt(prompt, role, content):
+    roleName = role.upper() + ": "
+    prompt.append({"role": role, "content": roleName + content})
+    return prompt
+
+
+def printPromptHistory(promptHistory):
+    printDump("")
+    printDump("Current conversation:")
+    for item in promptHistory:
+        printDump(item["content"])
+    return
+
+
 def printSetting(isEnabled, descriptionIn):
     if isEnabled:
         printGeneric("[ON] " + descriptionIn)
     else:
         printGeneric("[OFF] " + descriptionIn)
+    return
+
+
+def command_clear():
+    i = 0
+    j = 64
+    while i <= j:
+        printGeneric("\n")
+        i += 1
     return
 
 
@@ -137,6 +159,16 @@ def formatArrayToString(dataIn, separator):
             stringBuilder += separator
         i += 1
     return stringBuilder
+
+
+def getGrammarString(listIn):
+    grammarStringBuilder = "root ::= ("
+    for item in listIn:
+        if len(grammarStringBuilder) > 10:
+            grammarStringBuilder += " | "
+        grammarStringBuilder += "\"" + item + "\""
+    grammarStringBuilder += ")"
+    return grammarStringBuilder
 
 
 def errorBlankEmptyText(sourceIn):
@@ -201,11 +233,9 @@ def createOpenAIImageRequest(modelIn, promptIn, sizeIn):
 
 def printOpenAIError(error, iteration):
     if iteration < 2:
-        printError("")
-        printError("Failed to create completion! Trying again...")
+        printError("\nFailed to create completion! Trying again...")
     else:
-        printError("")
-        printError("Failed to create completion after 3 tries!")
+        printError("\nFailed to create completion after 3 tries!")
     if type(error) is openai.OpenAIError:
         if error.json_body is None:
             body = str(error)

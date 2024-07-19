@@ -58,14 +58,18 @@ def searchDDG(keywords, maxSources):
             break
         except Exception as e:
             if tries >= 2:
-                printError("Couldn't load DuckDuckGo after 3 tries! Aborting search.")
-                printError("(" + str(e) + ")")
+                printError("\nCouldn't load DuckDuckGo after 3 tries! Aborting search.")
                 return ""
             else:
-                printError("Exception thrown while searching DuckDuckGo, trying again in 5 seconds...")
+                printError("\nException thrown while searching DuckDuckGo, trying again in 5 seconds...")
+            
+            if "202 Ratelimit" in str(e):
+                printError("(Rate limited - try opening DDG in a browser to reset the limit)")
+            else:
                 printError("(" + str(e) + ")")
-                time.sleep(5)
-                tries += 1
+            
+            time.sleep(5)
+            tries += 1
     return hrefs
 
 

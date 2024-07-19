@@ -17,9 +17,9 @@ from modules.utils_web import *
 
 
 # TODO:
-# - rework convo names to be easier to type, autocompletion
+# - rework convo names to be easier to type
 # - clean code
-# - catch and skip forbidden response words "<im_start>system", etc.
+# - fix target links being smashed together
 
 
 #################################################
@@ -28,10 +28,11 @@ from modules.utils_web import *
 
 
 #### STATIC CONFIGURATION ####
-stopwords = ["<|im_e", "\n\n\n\n\n"]
+stopwords = ["|im_end>", "\n\n\n\n\n", "</s>"]
 openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
-strRespondUsingInformation = "Provide a response that is restricted to the information contained in the following input data: "
-strDetermineBestAssistant = "Use the following descriptions of each assistant to determine the assistant with the most relevant skills related to the task given by USER: "
+strRespondUsingInformation = "Provide a response that is restricted to the information contained in the following data: "
+strDetermineBestAssistant = "Use the following descriptions of each assistant to determine which assistant has the most relevant skills related to the task given by USER: "
+
 
 #### CONFIGURATION LOADER ####
 fileConfiguration = readFile("", "config.cfg", "\n")
@@ -40,6 +41,7 @@ initConfig(fileConfiguration)
 
 ####### MODELS LOADER #######
 fileModelsConfiguration = json.loads(readFile("", "models.json"))
+
 
 def getModelByName(modelNameIn):
     for model in fileModelsConfiguration:
@@ -56,10 +58,6 @@ def resetCurrentModel():
     global currentModel
     currentModel = getModelByName(configuration["DEFAULT_MODEL"])
     return
-
-
-def getCurrentModelSystemPrompt():
-    return currentModel["model_system_prompt"]
 
 
 def getEnabledModelNames():
@@ -81,33 +79,37 @@ def getEnabledModelDescriptions():
 
 
 ##### MAIN CONFIGURATION #####
-if configuration["ADDRESS"].endswith("/"):
-    openai.api_base = configuration["ADDRESS"] + "v1"
-else:
-    openai.api_base = configuration["ADDRESS"] + "/v1"
-shouldAutomaticallySwitchModels = (configuration["ENABLE_AUTOMATIC_MODEL_SWITCHING"] == "True")
 currentModel = getModelByName(configuration["DEFAULT_MODEL"])
 if currentModel is None:
     printRed("\nYour default model is missing from models.json! Please fix your configuration.")
     exit()
-intResponseTimeout = int(configuration["RESPONSE_TIMEOUT_SECONDS"])
-shouldConsiderHistory = (configuration["CHAT_HISTORY_CONSIDERATION"] == "True")
-shouldUseInternet = (configuration["ENABLE_INTERNET"] == "True")
-intMaxSourcesPerSearch = int(configuration["MAX_SOURCES_PER_SEARCH"])
-intMaxSentencesPerSource = int(configuration["MAX_SENTENCES_PER_SOURCE"])
-shouldAutomaticallyOpenFiles = (configuration["AUTO_OPEN_FILES"] == "True")
+
+
+if not configuration["ADDRESS"].endswith("/v1"):
+    newAddress = configuration["ADDRESS"]
+    if not newAddress.endswith("/"):
+        newAddress += "/"
+    openai.api_base = newAddress + "v1"
+
+
+strSystemPrompt                 =    (configuration["SYSTEM_PROMPT"])
+intResponseTimeout              = int(configuration["RESPONSE_TIMEOUT_SECONDS"])
+shouldAutomaticallySwitchModels =    (configuration["ENABLE_AUTOMATIC_MODEL_SWITCHING"].lower() == "true")
+shouldConsiderHistory           =    (configuration["CHAT_HISTORY_CONSIDERATION"].lower() == "true")
+shouldUseInternet               =    (configuration["ENABLE_INTERNET"].lower() == "true")
+intMaxSourcesPerSearch          = int(configuration["MAX_SOURCES_PER_SEARCH"])
+intMaxSentencesPerSource        = int(configuration["MAX_SENTENCES_PER_SOURCE"])
+shouldAutomaticallyOpenFiles    =    (configuration["AUTO_OPEN_FILES"].lower() == "true")
 
 
 # STABLEDIFFUSION CONFIGURATION #
-strModelStableDiffusion = configuration["STABLE_DIFFUSION_MODEL"]
-strImageSize = configuration["IMAGE_SIZE"]
+strModelStableDiffusion         =    (configuration["STABLE_DIFFUSION_MODEL"])
+strImageSize                    =    (configuration["IMAGE_SIZE"])
 
 
 #################################################
 ############## BEGIN CONVERSATIONS ##############
 #################################################
-
-
 strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 strConvoName = strConvoTimestamp
 
@@ -214,22 +216,25 @@ triggerMap = {
 ##################################################
 
 
-def command_clear():
-    i = 0
-    j = 64
-    while i <= j:
-        printGeneric("\n")
-        i += 1
-    return
-
-
 def command_settings():
-    printGeneric("\nCurrent Settings:")
-    printGeneric("\nModel: " + getCurrentModelName())
+    printGeneric("\nSettings:")
     printSetting(shouldUseInternet, "Auto Internet Search")
     printSetting(shouldAutomaticallySwitchModels, "Automatically Switch Models")
     printSetting(shouldConsiderHistory, "Consider Chat History")
-    printGeneric("\nCurrent conversation file: " + strConvoName + ".convo")
+    
+    printGeneric("\nModel:")
+    printGeneric(getCurrentModelName())
+    
+    printGeneric("\nConversation file:")
+    printGeneric(strConvoName + ".convo")
+    
+    printGeneric("\nSystem prompt:")
+    if len(strSystemPrompt) > 0:
+        printGeneric(strSystemPrompt)
+    else:
+        printGeneric("(Empty)")
+    
+    printGeneric("")
     return
 
 
@@ -286,7 +291,6 @@ def command_sd_model():
     strModelStableDiffusion = model
     printSeparator()
     printGreen("\nStable Diffusion model set to: " + model)
-    # TODO: kill stablediffusion if required ?
     return
 
 
@@ -294,9 +298,9 @@ def command_online():
     global shouldUseInternet
     shouldUseInternet = not shouldUseInternet
     if shouldUseInternet:
-        printGreen("\nSet to online mode!")
+        printGreen("\nSet to online mode!\n")
     else:
-        printRed("\nSet to offline mode!")
+        printRed("\nSet to offline mode!\n")
     return
 
 
@@ -309,9 +313,9 @@ def command_history():
     global shouldConsiderHistory
     shouldConsiderHistory = not shouldConsiderHistory
     if shouldConsiderHistory:
-        printGreen("\nNow using chat history in prompts!")
+        printGreen("\nNow using chat history in prompts!\n")
     else:
-        printRed("\nNot using chat history in prompts!")
+        printRed("\nNot using chat history in prompts!\n")
     return
 
 
@@ -319,34 +323,64 @@ def command_switcher():
     global shouldAutomaticallySwitchModels
     shouldAutomaticallySwitchModels = not shouldAutomaticallySwitchModels
     if shouldAutomaticallySwitchModels:
-        printGreen("\nNow automatically switching models!")
+        printGreen("\nNow automatically switching models!\n")
     else:
-        printRed("\nNot automatically switching models!")
+        printRed("\nNot automatically switching models!\n")
     return
 
 
 def command_help():
     printGeneric("\nAvailable commands:\n")
-    printGeneric(" - generate [prompt]")
-    for entry, value in commandMap.items():
-        commandName = value[0]
+    for commandName in commandMap.values():
         if len(commandName) > 0:
+            commandAliasStringBuilder = ""
+            for commandAlias in commandName:
+                if len(commandAliasStringBuilder) > 0:
+                    commandAliasStringBuilder += ", " + commandAlias
+                else:
+                    commandAliasStringBuilder = commandAlias
+            printGeneric(" - " + commandAliasStringBuilder)
+        else:
             printGeneric(" - " + commandName)
-    printGeneric(" - exit / quit")
+    printGeneric("")
     return
 
 
+def command_system_prompt():
+    global strSystemPrompt
+    printGeneric("\nCurrent system prompt:")
+    if len(strSystemPrompt) > 0:
+        printGeneric(strSystemPrompt + "\n")
+    else:
+        printGeneric("(Empty)\n")
+    printSeparator()
+    strSystemPrompt = printInput("Enter the new system prompt: ")
+    printSeparator()
+    printGreen("\nSet system prompt to:")
+    if len(strSystemPrompt) > 0:
+        printGreen(strSystemPrompt + "\n")
+    else:
+        printGreen("(Empty)\n")
+    return
+
+
+def command_exit():
+    exit()
+    return
+
 commandMap = {
-    command_help: ["", "help", "?"],
-    command_clear: ["clear"],
-    command_convo: ["convo"],
-    command_curl: ["curl"],
-    command_settings: ["settings"],
-    command_model: ["model"],
-    command_sd_model: ["sdmodel"],
-    command_online: ["online"],
-    command_history: ["history"],
-    command_switcher: ["switcher"]
+    command_help: ["", "/help"],
+    command_clear: ["/clear"],
+    command_convo: ["/convo"],
+    command_curl: ["/curl"],
+    command_history: ["/history"],
+    command_model: ["/model"],
+    command_online: ["/online"],
+    command_sd_model: ["/sdmodel"],
+    command_settings: ["/settings"],
+    command_system_prompt: ["/system", "/systemprompt"],
+    command_switcher: ["/switcher"],
+    command_exit: ["/exit"]
 }
 
 
@@ -355,11 +389,7 @@ commandMap = {
 #################################################
 
 
-def function_action(actions_dictionary):
-    return
-
-
-def function_model(assistant_name):
+def function_action(actions_array):
     return
 
 
@@ -376,30 +406,12 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         promptHistory = []
     
     if len(dataIn) > 0:
-        promptHistory.append(
-            {
-                "role": "system",
-                "content": getCurrentModelSystemPrompt() + strRespondUsingInformation + "\n" + formatArrayToString(dataIn, "\n\n")
-            }
-        )
-    else:
-        promptHistory.append(
-            {
-                "role": "system",
-                "content": getCurrentModelSystemPrompt()
-            }
-        )
+        promptHistory = addToPrompt(promptHistory, "system", strRespondUsingInformation + formatArrayToString(dataIn, " "))
     
-    promptHistory.append(
-        {
-            "role": "user",
-            "content": userPromptIn
-        }
-    )
+    promptHistory = addToPrompt(promptHistory, "system", strSystemPrompt)
+    promptHistory = addToPrompt(promptHistory, "user", userPromptIn)
     
-    printDump("\nCurrent conversation:\n")
-    for obj in promptHistory:
-        printDump(str(obj))
+    printPromptHistory(promptHistory)
     
     completion = createOpenAIChatCompletionRequest(getCurrentModelName(), promptHistory, shouldStream = True)
     
@@ -449,100 +461,83 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                         break # while loop
         printResponse("")
         if len(dataIn) > 0 and shouldWriteDataToConvo:
-            writeConversation("SYSTEM: " + strRespondUsingInformation + "\n" + formatArrayToString(dataIn, "\n\n"))
+            writeConversation("SYSTEM: " + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n"))
         writeConversation("USER: " + userPromptIn)
         writeConversation("ASSISTANT: " + assistantResponse)
     return
 
 
+function_call = {"name": "function_action"}
+
+
+actionEnums = [
+    "SEARCH_INTERNET_WITH_SEARCH_TERM",
+    "GENERATE_IMAGE_WITH_DESCRIPTION"
+]
+
+
+strFunctionSystemPrompt = "Determine if additional actions need to be completed for the following prompt. Actions should only be used when necessary. Available actions are: '" + formatArrayToString(actionEnums, "', '") + "'."
+
+
+function = [{
+    "name": "function_action",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "actions_array": {
+                "type": "array",
+                "description": "An order-sensitive action plan array that must be completed in order to answer the USER's prompt." +
+                    " Each item in the array consists of an action and its corresponding input data." +
+                    " Duplicate actions are permitted when the input data is different between the actions." +
+                    " If no additional actions need to be completed, then return an empty array with no items.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": "The action to be completed." +
+" Use 'SEARCH_INTERNET_WITH_SEARCH_TERM' to research a single topic or subject using updated information from the internet." + 
+" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested",
+                            "enum": actionEnums,
+                        },
+                        "action_input_data": {
+                            "type": "string",
+                            "description": "The input data that corresponds to this action." + 
+" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms to be used to search for updated information from the internet." +
+" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created.",
+                        }
+                    }
+                }
+            }
+        },
+        "required": ["actions_array"]
+    }
+}]
+
+
 def getFunctionResponse(promptIn):
-    actionEnums = [
-        "SEARCH_INTERNET_WITH_SEARCH_TERM",
-        "GENERATE_IMAGE_WITH_DESCRIPTION"
-    ]
     # TODO:
     # APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
     # for file operations, catch "dangerous" actions (edit system files, etc.)
-    
-    function = [
-        {
-            "name": "function_action",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "actions_dictionary": {
-                        "type": "array",
-                        "description": "Generate an order-sensitive array of additional actions that need to be completed." +
-                            " Duplicate actions are allowed, only when the input data is distinctly different in each action." +
-                            " You are encouraged to generate multiple specific actions for each topic or action in the prompt." +
-                            " If you are ready to respond without using any additional actions, generate an empty array.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "action": {
-                                    "type": "string",
-                                    "description": "The action to be completed." +
-                                        " Use 'SEARCH_INTERNET_WITH_SEARCH_TERM', to search for only one specific topic." + 
-                                        " Use 'GENERATE_IMAGE_WITH_DESCRIPTION', to create an artificial image for the user.",
-                                    "enum": actionEnums,
-                                },
-                                "action_input_data": {
-                                    "type": "string",
-                                    "description": "The data that corresponds to this action.",
-                                },
-                            },
-                        },
-                    },
-                },
-                "required": ["actions_dictionary"],
-            },
-        },
-    ]
-    
-    function_call = {
-        "name": "function_action"
-    }
-    
-    if shouldConsiderHistory:
-        promptHistory = getPromptHistory()
-    else:
-        promptHistory = []
-    
-    printDump("\nCurrent conversation:\n")
-    for obj in promptHistory:
-        printDump(str(obj))
-    
-    prompt = [
-        {
-            "role": "system",
-            "content": "You are a helpful assistant." +
-                " You will respond accurately and factually." +
-                " Use the conversation as context, only when it is relevant to the newest prompt."
-        },
-        {
-            "role": "user",
-            "content": promptIn,
-        }
-    ]
     
     resetCurrentModel()
     
     hrefs = []
     searchedTerms = []
     datas = []
+    promptHistory = []
     
-    dataPrompt = []
-    if len(datas) > 0:
-        dataPrompt = [
-            {
-                "role": "system",
-                "content": strRespondUsingInformation + "\n" + formatArrayToString(datas, "\n\n")
-            }
-        ]
-    fullPrompt = dataPrompt + promptHistory + prompt
-    printDump("\nCurrent conversation:\n")
-    for obj in fullPrompt:
-        printDump(str(obj))
+    if shouldConsiderHistory:
+        promptHistory = getPromptHistory()
+    
+    prompt = addToPrompt([], "system", strFunctionSystemPrompt)
+    prompt = addToPrompt(prompt, "user", promptIn)
+    
+    fullPrompt = promptHistory + prompt
+    
+    printPromptHistory(fullPrompt)
+    printDebug("\nDetermining function(s) to do for this prompt...")
+
     actionsResponse = createOpenAIChatCompletionRequest(
         getCurrentModelName(),
         fullPrompt,
@@ -550,18 +545,21 @@ def getFunctionResponse(promptIn):
         functionCallIn = function_call,
     )
     
-    if actionsResponse is not None and actionsResponse.get("actions_dictionary") is not None:
-        for action in actionsResponse.get("actions_dictionary"):
+    if actionsResponse is not None and actionsResponse.get("actions_array") is not None:
+        printDebug("\nDetermined actions and input data:")
+        for action in actionsResponse.get("actions_array"):
+            printDebug("'" + action.get("action") +"': " + action.get("action_input_data"))
+        for action in actionsResponse.get("actions_array"):
             theAction = action.get("action")
             theActionInputData = action.get("action_input_data")
             match theAction:
                 case "SEARCH_INTERNET_WITH_SEARCH_TERM":
                     if not shouldUseInternet:
-                        printDebug("Internet is disabled, skipping this action.")
+                        printDebug("\nInternet is disabled - skipping this action.")
                     else:
                         if len(theActionInputData) > 0:
                             theActionInputData = theActionInputData.lower()
-                            if not theActionInputData in searchedTerms:
+                            if not theActionInputData in searchedTerms and not theActionInputData.upper() in actionEnums:
                                 searchedTerms.append(theActionInputData)
                                 searchResultSources = getSourcesResponse(theActionInputData, intMaxSourcesPerSearch)
                                 nonDuplicateHrefs = []
@@ -569,7 +567,7 @@ def getFunctionResponse(promptIn):
                                     if href not in hrefs:
                                         nonDuplicateHrefs.append(href)
                                     else:
-                                        printDebug("Skipped duplicate source: " + key)
+                                        printDebug("\nSkipped duplicate source: " + key)
                                 if len(nonDuplicateHrefs) > 0:
                                     searchResults = getSourcesTextAsync(nonDuplicateHrefs, intMaxSentencesPerSource)
                                     if len(searchResults) > 0:
@@ -580,21 +578,20 @@ def getFunctionResponse(promptIn):
                                     else:
                                         printError("\nNo search results with this search term.")
                                 else:
-                                    printDebug("All target links are duplicates!")
+                                    printDebug("\nAll target links are duplicates!")
                                     printDebug("Skipping this search.")
                             else:
                                 printError("\nSkipping duplicated search term: " + theActionInputData)
                         else:
                             printError("\nNo search term provided.")
                 case "GENERATE_IMAGE_WITH_DESCRIPTION":
-                    printDebug("Generating image with description: " + theActionInputData)
                     getImageResponse(theActionInputData)
                 case _:
                     printError("\nUnrecognized action: " + action)
                     printError("Breaking out of loop.")
                     break
     else:
-        printError("No response - aborting.")
+        printError("\nNo response - aborting.")
         return
     if len(hrefs) < 1:
         printInfo("\nThis is an offline response!")
@@ -629,31 +626,15 @@ def getModelResponse(promptIn):
     if not shouldAutomaticallySwitchModels:
         return currentModel
     else:
-        grammarStringBuilder = "root ::= ("
-        for modelName in getEnabledModelNames():
-            if len(grammarStringBuilder) > 10:
-                grammarStringBuilder += " | "
-            grammarStringBuilder += "\"" + modelName + "\""
-        grammarStringBuilder += ")"
-        promptMessage = []
+        promptMessage = addToPrompt([], "system", strDetermineBestAssistant + getEnabledModelDescriptions())
+        promptMessage = addToPrompt(promptMessage, "user", promptIn)
         
-        promptMessage.append(
-            {
-                "role": "system",
-                "content": strDetermineBestAssistant + getEnabledModelDescriptions()
-            }
-        )
-        promptMessage.append(
-            {
-                "role": "user",
-                "content": promptIn
-            }
-        )
+        grammarString = getGrammarString(getEnabledModelNames())
+        
         printDump("\nCurrent prompt for model response:")
-        for obj in promptMessage:
-            printDump(str(obj))
-        printDump("\nChoices: " + grammarStringBuilder)
-        nextModel = createOpenAIChatCompletionRequest(getCurrentModelName(), promptMessage, grammarIn = grammarStringBuilder)
+        printPromptHistory(promptMessage)
+        printDump("\nChoices: " + grammarString)
+        nextModel = createOpenAIChatCompletionRequest(getCurrentModelName(), promptMessage, grammarIn = grammarString)
         printDebug("\nNext model: " + nextModel)
         return getModelByName(nextModel)
 
@@ -719,65 +700,31 @@ def checkTriggers(promptIn):
 
 def getPromptHistory():
     conversation = getConversation()
-    promptHistoryStrings = []
+    promptHistory = []
     stringBuilder = ""
     for line in conversation:
         if line.startswith("SYSTEM: ") or line.startswith("USER: ") or line.startswith("ASSISTANT: "):
             if len(stringBuilder) == 0:
                 stringBuilder += line
             else:
-                promptHistoryStrings.append(stringBuilder)
-                stringBuilder = "" + line
+                promptHistory = addToPrompt(promptHistory, (stringBuilder.split(": ")[0]).lower(), stringBuilder)
+                stringBuilder = line
         else:
             stringBuilder += line
-    promptHistoryStrings.append(stringBuilder)
-    promptHistory = []
-    for entry in promptHistoryStrings:
-        if len(entry) > 0:
-            if entry.startswith("SYSTEM: "):
-                promptHistory.append(
-                    {
-                        "role": "system",
-                        "content": entry.replace("SYSTEM: ", "", 1),
-                    }
-                )
-            elif entry.startswith("USER: "):
-                promptHistory.append(
-                    {
-                        "role": "user",
-                        "content": entry.replace("USER: ", "", 1),
-                    }
-                )
-            elif entry.startswith("ASSISTANT: "):
-                promptHistory.append(
-                    {
-                        "role": "assistant",
-                        "content": entry.replace("ASSISTANT: ", "", 1),
-                    }
-                )
+    promptHistory = addToPrompt(promptHistory, (stringBuilder.split(": ")[0]).lower(), stringBuilder)
     return promptHistory
 
 
 ##################################################
 ################### BEGIN MAIN ###################
 ##################################################
-
-
 command_clear()
 command_settings()
-printGeneric("")
 
 
 while True:
     printSeparator()
-    strPrompt = printInput("Enter a prompt ('help' for list of commands): ")
+    strPrompt = printInput("Enter a prompt ('/help' for list of commands): ")
     printSeparator()
-    if strPrompt == "exit" or strPrompt == "quit":
-        break
-    elif strPrompt.startswith("generate"):
-        tic = time.perf_counter()
-        getImageResponse(strPrompt.replace("generate ", ""))
-        toc = time.perf_counter()
-    else:
-        handlePrompt(strPrompt)
+    handlePrompt(strPrompt)
 
