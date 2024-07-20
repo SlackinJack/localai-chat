@@ -107,6 +107,14 @@ strModelStableDiffusion         =    (configuration["STABLE_DIFFUSION_MODEL"])
 strImageSize                    =    (configuration["IMAGE_SIZE"])
 
 
+def printCurrentSystemPrompt(printer, space = ""):
+    if len(strSystemPrompt) > 0:
+        printer(strSystemPrompt + space)
+    else:
+        printer("(Empty)" + space)
+    return
+
+
 #################################################
 ############## BEGIN CONVERSATIONS ##############
 #################################################
@@ -229,10 +237,7 @@ def command_settings():
     printGeneric(strConvoName + ".convo")
     
     printGeneric("\nSystem prompt:")
-    if len(strSystemPrompt) > 0:
-        printGeneric(strSystemPrompt)
-    else:
-        printGeneric("(Empty)")
+    printCurrentSystemPrompt(printGeneric)
     
     printGeneric("")
     return
@@ -241,23 +246,27 @@ def command_settings():
 def command_convo():
     printGeneric("\nConversations available:\n")
     convoList = []
+    
     for conversation in os.listdir("conversations"):
         if conversation.endswith(".convo"):
-            convoList.append(conversation.replace(".convo", ""))
-    for convo in convoList:
-        printGeneric(convo)
+            convoName = conversation.replace(".convo", "")
+            convoList.append(convoName)
+            printGeneric(convoName)
+    
     printGeneric("")
     printSeparator()
     convoName = printInput("Select a conversation to use, create a new one by using an unique name, or leave blank for auto-generated: ")
     printSeparator()
+    
     if len(convoName) == 0:
         convoName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     else:
         for conversation in convoList:
             if convoName in conversation:
                 convoName = conversation
+    
     setConversation(convoName)
-    printGreen("\nConversation set to: " + convoName)
+    printGreen("\nConversation set to: " + convoName + "\n")
     return
 
 
@@ -280,6 +289,7 @@ def command_model():
         else:
             currentModel = nextModelObj
             printGreen("\nChat model set to: " + getCurrentModelName())
+    printGeneric("")
     return
 
 
@@ -290,7 +300,7 @@ def command_sd_model():
         model = strModelStableDiffusion
     strModelStableDiffusion = model
     printSeparator()
-    printGreen("\nStable Diffusion model set to: " + model)
+    printGreen("\nStable Diffusion model set to: " + model + "\n")
     return
 
 
@@ -349,18 +359,12 @@ def command_help():
 def command_system_prompt():
     global strSystemPrompt
     printGeneric("\nCurrent system prompt:")
-    if len(strSystemPrompt) > 0:
-        printGeneric(strSystemPrompt + "\n")
-    else:
-        printGeneric("(Empty)\n")
+    printCurrentSystemPrompt(printGeneric, "\n")
     printSeparator()
     strSystemPrompt = printInput("Enter the new system prompt: ")
     printSeparator()
     printGreen("\nSet system prompt to:")
-    if len(strSystemPrompt) > 0:
-        printGreen(strSystemPrompt + "\n")
-    else:
-        printGreen("(Empty)\n")
+    printCurrentSystemPrompt(printGreen, "\n")
     return
 
 
@@ -408,7 +412,9 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     if len(dataIn) > 0:
         promptHistory = addToPrompt(promptHistory, "system", strRespondUsingInformation + formatArrayToString(dataIn, " "))
     
-    promptHistory = addToPrompt(promptHistory, "system", strSystemPrompt)
+    if len(strSystemPrompt) > 0:
+        promptHistory = addToPrompt(promptHistory, "system", strSystemPrompt)
+    
     promptHistory = addToPrompt(promptHistory, "user", userPromptIn)
     
     printPromptHistory(promptHistory)
@@ -417,22 +423,26 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     
     printResponse("")
     if completion is not None:
-        assistantResponse = pausedLetters = ""
+        assistantResponse = ""
+        pausedLetters = ""
         potentialStopwords = {}
         stop = False
-        tic = toc = time.perf_counter()
+        tic = time.perf_counter()
+        toc = time.perf_counter()
         while (toc - tic) < intResponseTimeout:
             toc = time.perf_counter()
             for chunk in completion:
                 letter = chunk.choices[0].delta.content
                 if letter is not None:
-                    pause = hasAdded = False
+                    pause = False
+                    hasAdded = False
                     # check stop words
                     for stopword in stopwords:
                         if stopword.startswith(letter):
                             potentialStopwords[stopword] = 1
                             pausedLetters += letter
-                            hasAdded = pause = True
+                            hasAdded = True
+                            pause = True
                             break
                     # check current stop words
                     for stopword, index in potentialStopwords.items():
@@ -450,12 +460,13 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                     if not pause and not stop:
                         if len(pausedLetters) > 0:
                             printResponse(pausedLetters, "")
+                            assistantResponse += pausedLetters
                             pausedLetters = ""
                         printResponse(letter, "")
                         tic = toc
-                        time.sleep(0.005)
+                        time.sleep(0.015)
                         sys.stdout.flush()
-                        assistantResponse = assistantResponse + letter
+                        assistantResponse += letter
                     elif stop:
                         break # chunk iteration
                         break # while loop
@@ -463,20 +474,17 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         if len(dataIn) > 0 and shouldWriteDataToConvo:
             writeConversation("SYSTEM: " + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n"))
         writeConversation("USER: " + userPromptIn)
-        writeConversation("ASSISTANT: " + assistantResponse)
+        writeConversation("ASSISTANT: " + assistantResponse.replace("ASSISTANT: ", "").replace("SYSTEM: ", ""))
     return
-
-
-function_call = {"name": "function_action"}
 
 
 actionEnums = [
     "SEARCH_INTERNET_WITH_SEARCH_TERM",
-    "GENERATE_IMAGE_WITH_DESCRIPTION"
+    #"GENERATE_IMAGE_WITH_DESCRIPTION"
 ]
 
 
-strFunctionSystemPrompt = "Determine if additional actions need to be completed for the following prompt. Actions should only be used when necessary. Available actions are: '" + formatArrayToString(actionEnums, "', '") + "'."
+strFunctionSystemPrompt = "Determine if it is necessary to perform additional actions in order to complete the USER's request. Create an action plan in the form of an array, if actions are necessary. Otherwise, create an blank array. Available actions are: '" + formatArrayToString(actionEnums, "', '") + "'."
 
 
 function = [{
@@ -486,31 +494,33 @@ function = [{
         "properties": {
             "actions_array": {
                 "type": "array",
-                "description": "An order-sensitive action plan array that must be completed in order to answer the USER's prompt." +
-                    " Each item in the array consists of an action and its corresponding input data." +
-                    " Duplicate actions are permitted when the input data is different between the actions." +
-                    " If no additional actions need to be completed, then return an empty array with no items.",
+                "description": "An order-sensitive action plan array that will be completed in order to complete the USER's prompt." +
+                    " Actions should only be added when it is necessary to accurately respond to the prompt." +
+                    " Available actions are: '" + formatArrayToString(actionEnums, "', '") + "'." +
+                    " Each item in the array consists of a single action with its corresponding input data for the action." +
+                    " Duplicate actions are permitted only when the input data is different between each action." +
+                    " If no additional actions are to be completed, then create an empty array with no items.",
                 "items": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "description": "The action to be completed." +
-" Use 'SEARCH_INTERNET_WITH_SEARCH_TERM' to research a single topic or subject using updated information from the internet." + 
-" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested",
+                            "description": "The action to be completed at this step of the action plan." +
+" Use 'SEARCH_INTERNET_WITH_SEARCH_TERM' to research a single topic or subject using updated information from the internet.",
+#" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested",
                             "enum": actionEnums,
                         },
                         "action_input_data": {
                             "type": "string",
-                            "description": "The input data that corresponds to this action." + 
-" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms to be used to search for updated information from the internet." +
-" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created.",
+                            "description": "The input data that corresponds to this specific action." + 
+" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms that will be used to search for updated information on the internet."
+#" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created.",
                         }
                     }
                 }
             }
         },
-        "required": ["actions_array"]
+        #"required": ["actions_array"]
     }
 }]
 
@@ -542,20 +552,27 @@ def getFunctionResponse(promptIn):
         getCurrentModelName(),
         fullPrompt,
         functionsIn = function,
-        functionCallIn = function_call,
+        functionCallIn = { "name": "function_action" },
     )
     
     if actionsResponse is not None and actionsResponse.get("actions_array") is not None:
         printDebug("\nDetermined actions and input data:")
-        for action in actionsResponse.get("actions_array"):
-            printDebug("'" + action.get("action") +"': " + action.get("action_input_data"))
+        
+        # print all actions to do
+        if len(actionsResponse.get("actions_array")) > 0 and len(actionsResponse.get("actions_array")[0]) > 0:
+            for action in actionsResponse.get("actions_array"):
+                printDebug(" - '" + action.get("action") +"': " + action.get("action_input_data"))
+        else:
+            printDebug("(None)")
+        
+        # do the actions one by one
         for action in actionsResponse.get("actions_array"):
             theAction = action.get("action")
             theActionInputData = action.get("action_input_data")
             match theAction:
                 case "SEARCH_INTERNET_WITH_SEARCH_TERM":
                     if not shouldUseInternet:
-                        printDebug("\nInternet is disabled - skipping this action.")
+                        printDebug("\nInternet is disabled - skipping this action. ('" + theAction + "': " + theActionInputData + ")")
                     else:
                         if len(theActionInputData) > 0:
                             theActionInputData = theActionInputData.lower()
@@ -591,18 +608,21 @@ def getFunctionResponse(promptIn):
                     printError("Breaking out of loop.")
                     break
     else:
-        printError("\nNo response - aborting.")
+        printError("\nNo response - defaulting to chat completion.")
+        getChatCompletionResponse(promptIn, shouldWriteDataToConvo = True)
         return
-    if len(hrefs) < 1:
+    
+    hasHref = len(hrefs) > 0
+    
+    if not hasHref:
         printInfo("\nThis is an offline response!")
     
     getChatCompletionResponse(promptIn, dataIn = datas, shouldWriteDataToConvo = True)
     
-    if len(hrefs) > 0:
+    if hasHref:
         printResponse("\n\n\nSources analyzed:\n")
         for href in hrefs:
             printResponse(href)
-    
     return
 
 
@@ -656,12 +676,16 @@ def handlePrompt(promptIn):
 
 
 def checkCommands(promptIn):
-    for key, value in commandMap.items():
-        for v in value:
-            if strPrompt == v:
-                key()
-                return True
-    printDebug("\nNo commands detected.")
+    if promptIn.startswith("/"):
+        for key, value in commandMap.items():
+            for v in value:
+                if strPrompt == v:
+                    key()
+                    return True
+        printError("\nUnknown command.\n")
+        return True
+    else:
+        printDebug("\nNo commands detected.")
     return False
 
 
@@ -688,9 +712,7 @@ def checkTriggers(promptIn):
                 if percentage > targetPercentage:
                     triggerToCall = trigger
                     targetPercentage = percentage
-        if triggerToCall is None:
-            return False
-        else:
+        if not triggerToCall is None:
             printDebug("\nCalling trigger: " + str(triggerToCall))
             triggerToCall(promptIn)
             return True
@@ -707,12 +729,28 @@ def getPromptHistory():
             if len(stringBuilder) == 0:
                 stringBuilder += line
             else:
-                promptHistory = addToPrompt(promptHistory, (stringBuilder.split(": ")[0]).lower(), stringBuilder)
+                s = getRoleAndContentFromString(stringBuilder)
+                if s is not None:
+                    promptHistory = addToPrompt(promptHistory, s[0].lower(), s[1])
                 stringBuilder = line
         else:
             stringBuilder += line
-    promptHistory = addToPrompt(promptHistory, (stringBuilder.split(": ")[0]).lower(), stringBuilder)
+    s = getRoleAndContentFromString(stringBuilder)
+    if s is not None:
+        promptHistory = addToPrompt(promptHistory, s[0].lower(), s[1])
     return promptHistory
+
+
+def getRoleAndContentFromString(stringIn):
+    if len(stringIn) > 0:
+        separator = ": "
+        split = stringIn.split(separator)
+        if len(split) == 2:
+            return split
+        else:
+            printDebug("The following string is not in a valid role-content form!")
+            printDebug(stringIn)
+    return None
 
 
 ##################################################
