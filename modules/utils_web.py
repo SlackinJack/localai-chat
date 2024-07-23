@@ -81,6 +81,7 @@ jsErrors = [
     "supported browser",
 ]
 
+
 blockedErrors = [
     "Access Denied",
     "Access forbidden",
@@ -92,6 +93,7 @@ blockedErrors = [
     "Why have I been blocked?",
     "This website is using a security service to protect itself from online attacks.",
 ]
+
 
 def getInfoFromWebsite(websiteIn, bypassLength, maxSentences=0):
     printDebug("Getting text from: " + websiteIn)

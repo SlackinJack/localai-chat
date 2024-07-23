@@ -18,7 +18,6 @@ from modules.utils_web import *
 
 
 # TODO:
-# - rework convo names to be easier to type
 # - clean code
 # - fix target links being smashed together
 # - fix location and time in prompts
@@ -105,7 +104,9 @@ intResponseTimeout              = configMain["response_timeout_seconds"]
 
 
 # model configs
-currentModel = getModelByName(configModel["default_model"])
+currentModel                    = getModelByName(configModel["default_model"])
+
+
 if currentModel is None:
     printRed("\nYour default model is missing from models.json! Please fix your configuration.")
     exit()
@@ -121,7 +122,7 @@ intMaxSentencesPerSource        = configBehaviour["max_sentences_per_source"]
 shouldAutomaticallyOpenFiles    = configBehaviour["automatically_open_files"]
 
 
-# STABLEDIFFUSION CONFIGURATION #
+# stable diffusion configs #
 strModelStableDiffusion         = configStableDiffusion["stable_diffusion_model"]
 strImageSize                    = configStableDiffusion["stable_diffusion_image_size"]
 
@@ -157,17 +158,23 @@ setConversation(strConvoTimestamp)
 ##################################################
 
 
+def checkForYoutube(linkIn):
+    for youtubeFormat in triggerMap[trigger_youtube]:
+        if linkIn.startswith(youtubeFormat):
+            return getYouTubeCaptions(linkIn.replace(youtubeFormat, ""))
+    return None
+
+
 def trigger_youtube(promptIn):
     promptWithoutWebsites = promptIn
     youtubeTranscripts = []
     videoCounter = 1
     for s in promptIn.split(" "):
-        for linkFormat in triggerMap[trigger_youtube]:
-            if s.startswith(linkFormat):
-                promptWithoutWebsites = promptWithoutWebsites.replace(s, "")
-                ytId = s.replace(linkFormat, "")
-                youtubeTranscripts.append("Video " + str(videoCounter) + ": " + getYouTubeCaptions(ytId))
-                videoCounter += 1
+        youtubeResult = checkForYoutube(s)
+        if youtubeResult is not None:
+            promptWithoutWebsites = promptWithoutWebsites.replace(s, "")
+            youtubeTranscripts.append("Video " + str(videoCounter) + ": " + youtubeResult)
+            videoCounter += 1
     getChatCompletionResponse(promptWithoutWebsites, youtubeTranscripts, True)
     return
 
@@ -179,10 +186,16 @@ def trigger_browse(promptIn):
     for s in promptIn.split(" "):
         if s.startswith("http"):
             promptWithoutWebsites = promptWithoutWebsites.replace(s, "")
-            websiteText = getInfoFromWebsite(s, True)[1]
-            if checkEmptyString(websiteText):
-                websiteText = errorBlankEmptyText("website")
-            websiteTexts.append("Website " + str(websiteCounter) + ": " + websiteText)
+            youtubeResult = checkForYoutube(s)
+            websiteType = "Website"
+            if youtubeResult is not None:
+                websiteText = youtubeResult
+                websiteType = "Video"
+            else:
+                websiteText = getInfoFromWebsite(s, True)[1]
+                if checkEmptyString(websiteText):
+                    websiteText = errorBlankEmptyText("website")
+            websiteTexts.append(websiteType + " " + str(websiteCounter) + ": " + websiteText)
             websiteCounter += 1
     getChatCompletionResponse(promptWithoutWebsites, websiteTexts, True)
     return
@@ -201,24 +214,25 @@ def trigger_openFile(promptIn):
         if checkEmptyString(fileContent):
             fileContent = errorBlankEmptyText("file")
         else:
-            words = fileContent.split("http")
-            endHttpLetters = " )]}>"
+            # check for websites in file
+            words = re.split(' |\n|\r|\)|\]|\}|\>', fileContent)
             for word in words:
-                if word.startswith("://") or word.startswith("s://"):
-                    linkBuilder = "http"
-                    for letter in word:
-                        if letter not in endHttpLetters:
-                            linkBuilder += letter
-                        else:
-                            detectedWebsites.append(linkBuilder)
-                            break
+                if word.startswith("http://") or word.startswith("https://"):
+                    detectedWebsites.append(word)
+                    printDebug("Found website in file: " + word)
         fileContents.append("File: '" + fileName + "': " + fileContent)
         if len(detectedWebsites) > 0:
             for website in detectedWebsites:
-                websiteText = getInfoFromWebsite(website, True)[1]
-                if not checkEmptyString(websiteText):
-                    printDebug("Retrieved text from " + website + ": " + websiteText)
-                    fileContents.append("Website in file: '" + website + "': " + websiteText)
+                youtubeResult = checkForYoutube(website)
+                websiteType = "Website"
+                if youtubeResult is not None:
+                    websiteText = youtubeResult
+                    websiteType = "Video"
+                else: 
+                    websiteText = getInfoFromWebsite(website, True)[1]
+                    if not checkEmptyString(websiteText):
+                        printDebug("Retrieved text from " + website + ": " + websiteText)
+                fileContents.append(websiteType + " in file: '" + website + "': " + websiteText)
     getChatCompletionResponse(promptWithoutFilePaths, fileContents, True)
     return
 
@@ -383,6 +397,7 @@ def command_exit():
     exit()
     return
 
+
 commandMap = {
     command_help: ["", "/help"],
     command_clear: ["/clear"],
@@ -481,11 +496,11 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
                     elif stop:
                         break # chunk iteration
                         break # while loop
-        printResponse("")
         if len(dataIn) > 0 and shouldWriteDataToConvo:
             writeConversation("SYSTEM: " + strRespondUsingInformation + formatArrayToString(dataIn, "\n\n"))
         writeConversation("USER: " + userPromptIn)
         writeConversation("ASSISTANT: " + assistantResponse.replace("ASSISTANT: ", "").replace("SYSTEM: ", ""))
+        printResponse("\n")
     return
 
 

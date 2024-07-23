@@ -2,7 +2,6 @@ import json
 import openai
 import os
 import random
-import re
 import time
 
 
@@ -134,6 +133,15 @@ def printFormattedJson(jsonIn, printFunc=printDump):
 ##################################################
 
 
+blankCharacters = [
+    "\t",
+    "\n",
+    "\v",
+    "\r",
+    "\f"
+]
+
+
 def addToPrompt(prompt, role, content):
     roleName = role.upper() + ": "
     prompt.append({"role": role, "content": roleName + content})
@@ -141,7 +149,8 @@ def addToPrompt(prompt, role, content):
 
 
 def cleanupString(stringIn):
-    out = stringIn.replace("\n", " ").replace("\r", " ")         # remove all newlines
+    for char in blankCharacters:
+        out = stringIn.replace(char, " ")                        # remove all tabs, newlines, other special spaces
     out = ' '.join(out.split())                                  # remove all redundant spaces
     out = (out.encode("ascii", errors="ignore")).decode()        # drop all non-ascii chars
     return out
@@ -173,7 +182,7 @@ def trimTextBySentenceLength(textIn, maxLength):
 
 
 def checkEmptyString(strIn):
-    blanks = [" ", "\t", "\n", "\v", "\r", "\f"]
+    blanks = blankCharacters + [" "]
     for s in strIn:
         if s not in blanks:
             return False
@@ -188,7 +197,7 @@ def formatArrayToString(dataIn, separator):
         if i is not len(dataIn) - 1:
             stringBuilder += separator
         i += 1
-    return stringBuilder
+    return cleanupString(stringBuilder)
 
 
 def getGrammarString(listIn):
