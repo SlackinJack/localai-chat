@@ -21,6 +21,7 @@ from modules.utils_web import *
 # - clean code
 # - fix target links being smashed together
 # - fix location and time in prompts
+# - add more (comprehensive) tests
 
 
 #################################################
@@ -393,6 +394,57 @@ def command_system_prompt():
     return
 
 
+def command_selftest():
+    # TODO:
+    # - add stable diffusion test(s)
+    
+    result = printInput("The program will self-test. Do you want to continue? (y/n): ")
+    printSeparator()
+    if result.lower() == "y":
+        passes = 0
+        target = 6
+        
+        printGeneric("\nTesting chat completion...\n")
+        getChatCompletionResponse("Hi there, how are you?", ["Respond to USER in a respectful manner."], True)
+        printGreen("\nChat completion test passed!\n")
+        passes += 1
+        
+        printGeneric("\nTesting model switcher...\n")
+        global shouldAutomaticallySwitchModels
+        currentModelSwitcherSetting = shouldAutomaticallySwitchModels
+        shouldAutomaticallySwitchModels = True
+        getModelResponse("Write a simple python function that prints 'Hello, World!'")
+        shouldAutomaticallySwitchModels = currentModelSwitcherSetting
+        printGreen("\nModel switcher test passed!\n")
+        passes += 1
+        
+        printGeneric("\nTesting functions...\n")
+        getFunctionResponse("Search the internet for information on Big Ben.")
+        printGreen("\nFunctions test passed!\n")
+        passes += 1
+        
+        printGeneric("\nTesting input file...\n")
+        trigger_openFile("What is in this file 'tests/sample'")
+        printGreen("\nInput file test passed!\n")
+        passes += 1
+        
+        printGeneric("\nTesting internet browse...\n")
+        trigger_browse("Summarize this webpage https://example.com/")
+        printGreen("\nInternet browse test passed!\n")
+        passes += 1
+        
+        printGeneric("\nTesting YouTube...\n")
+        trigger_youtube("Summarize this YouTube video https://www.youtube.com/watch?v=TVLYtiunWJA")
+        printGreen("\nYouTube test passed!\n")
+        passes += 1
+        
+        if passes == target:
+            printGreen("\nAll tests passed!\n")
+        else:
+            printRed("\nSome tests failed - read log for details.\n")
+    return
+
+
 def command_exit():
     exit()
     return
@@ -407,6 +459,7 @@ commandMap = {
     command_model: ["/model"],
     command_online: ["/online"],
     command_sd_model: ["/sdmodel"],
+    command_selftest: ["/selftest"],
     command_settings: ["/settings"],
     command_system_prompt: ["/system", "/systemprompt"],
     command_switcher: ["/switcher"],
