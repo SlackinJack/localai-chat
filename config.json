@@ -1,0 +1,50 @@
+{
+    "main_configuration": {
+        "address_desc": "address of the server",
+        "address": "http://localhost:8080",
+        
+        "debug_level_desc": "set output debug level: 4-all, 3-debug, 2-info, 1-error, 0-disabled",
+        "debug_level": 4,
+        
+        "response_timeout_seconds_desc": "stop waiting for a response after x seconds",
+        "response_timeout_seconds": 2
+    },
+    
+    "model_configuration": {
+        "default_model_desc": "set the default model on startup and model switching. leave blank to use the first model alpha-numerically.",
+        "default_model": ""
+    },
+    
+    "behavioural_configuration": {
+        "system_prompt_desc": "define the default system prompt. leave blank to disable system prompts.",
+        "system_prompt": "You are a helpful ASSISTANT. You will provide a response to USER in the current conversation.",
+        
+        "enable_automatic_model_switching_desc": "toggle automatic model switching",
+        "enable_automatic_model_switching": false,
+        
+        "enable_chat_history_consideration_desc": "toggle using chat history as part of the prompt",
+        "enable_chat_history_consideration": false,
+        
+        "enable_internet_desc": "enable internet access for functions",
+        "enable_internet": true,
+        
+        "max_sources_per_search_desc": "max number of sources to use, when using online sources",
+        "max_sources_per_search": 2,
+        
+        "max_sentences_per_source_desc": "max number of sentences to use from each unique source",
+        "max_sentences_per_source": 12,
+        
+        "automatically_open_output_files_desc": "automatically open output files",
+        "automatically_open_files": true
+    },
+    
+    "stable_diffusion_configuration": {
+        "stable_diffusion_model_desc": "set the default stable diffusion model (cannot be empty if you want to use stable diffusion)",
+        "stable_diffusion_model": "stablediffusion",
+        
+        "stable_diffusion_image_size_desc": "set the resolution for stable diffusion images",
+        "stable_diffusion_image_size": "256x256"
+    }
+}
+
+

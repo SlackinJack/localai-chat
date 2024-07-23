@@ -1,17 +1,17 @@
-[
-    {
-        "model_name": "nous-13b",
-        "model_switchable": true,
-        "model_description": "Nous is a general-purpose assistant."
+{
+    "nous-13b": {
+        "switchable": true,
+        "description": "Nous is a general-purpose assistant."
     },
-    {
-        "model_name": "code-13b",
-        "model_switchable": true,
-        "model_description": "Code is an assistant who is trained for general programming, code and coding, software development."
+    
+    "code-13b": {
+        "switchable": true,
+        "description": "Code is an assistant who is trained for general programming, code and coding, software development."
     },
-    {
-        "model_name": "samantha-7b",
-        "model_switchable": true,
-        "model_description": "Samantha is an assistant who is trained for philosophy and personal relationships."
+    
+    "samantha-13b": {
+        "switchable": true,
+        "description": "Samantha is an assistant who is trained for philosophy and personal relationships."
     }
-]
+}
+

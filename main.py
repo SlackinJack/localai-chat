@@ -3,6 +3,7 @@ import json
 import openai
 import os
 import re
+import requests
 import time
 
 
@@ -20,6 +21,7 @@ from modules.utils_web import *
 # - rework convo names to be easier to type
 # - clean code
 # - fix target links being smashed together
+# - fix location and time in prompts
 
 
 #################################################
@@ -34,77 +36,43 @@ strRespondUsingInformation = "Provide a response that is restricted to the infor
 strDetermineBestAssistant = "Use the following descriptions of each assistant to determine which assistant has the most relevant skills related to the task given by USER: "
 
 
-#### CONFIGURATION LOADER ####
-fileConfiguration = readFile("", "config.cfg", "\n")
-initConfig(fileConfiguration)
-
-
 ####### MODELS LOADER #######
 fileModelsConfiguration = json.loads(readFile("", "models.json"))
 
 
 def getModelByName(modelNameIn):
-    for model in fileModelsConfiguration:
-        if modelNameIn in model["model_name"] or modelNameIn == model["model_name"]:
+    for model in fileModelsConfiguration.keys():
+        if modelNameIn in model or modelNameIn == model:
             return model
     return None
 
 
 def getCurrentModelName():
-    return currentModel["model_name"]
+    return currentModel
 
 
 def resetCurrentModel():
     global currentModel
-    currentModel = getModelByName(configuration["DEFAULT_MODEL"])
+    currentModel = getModelByName(configModel["default_model"])
     return
 
 
 def getEnabledModelNames():
     out = []
-    for model in fileModelsConfiguration:
-        if model["model_switchable"]:
-            out.append(model["model_name"])
+    for model, modelMetadata in fileModelsConfiguration.items():
+        if modelMetadata["switchable"]:
+            out.append(model)
     return out
 
 
 def getEnabledModelDescriptions():
     out = ""
-    for model in fileModelsConfiguration:
-        if model["model_switchable"]:
+    for model, modelMetadata in fileModelsConfiguration.items():
+        if modelMetadata["switchable"]:
             if len(out) > 0:
                 out += " "
-            out += model["model_description"]
+            out += modelMetadata["description"]
     return out
-
-
-##### MAIN CONFIGURATION #####
-currentModel = getModelByName(configuration["DEFAULT_MODEL"])
-if currentModel is None:
-    printRed("\nYour default model is missing from models.json! Please fix your configuration.")
-    exit()
-
-
-if not configuration["ADDRESS"].endswith("/v1"):
-    newAddress = configuration["ADDRESS"]
-    if not newAddress.endswith("/"):
-        newAddress += "/"
-    openai.api_base = newAddress + "v1"
-
-
-strSystemPrompt                 =    (configuration["SYSTEM_PROMPT"])
-intResponseTimeout              = int(configuration["RESPONSE_TIMEOUT_SECONDS"])
-shouldAutomaticallySwitchModels =    (configuration["ENABLE_AUTOMATIC_MODEL_SWITCHING"].lower() == "true")
-shouldConsiderHistory           =    (configuration["CHAT_HISTORY_CONSIDERATION"].lower() == "true")
-shouldUseInternet               =    (configuration["ENABLE_INTERNET"].lower() == "true")
-intMaxSourcesPerSearch          = int(configuration["MAX_SOURCES_PER_SEARCH"])
-intMaxSentencesPerSource        = int(configuration["MAX_SENTENCES_PER_SOURCE"])
-shouldAutomaticallyOpenFiles    =    (configuration["AUTO_OPEN_FILES"].lower() == "true")
-
-
-# STABLEDIFFUSION CONFIGURATION #
-strModelStableDiffusion         =    (configuration["STABLE_DIFFUSION_MODEL"])
-strImageSize                    =    (configuration["IMAGE_SIZE"])
 
 
 def printCurrentSystemPrompt(printer, space = ""):
@@ -113,6 +81,49 @@ def printCurrentSystemPrompt(printer, space = ""):
     else:
         printer("(Empty)" + space)
     return
+
+
+#### CONFIGURATION LOADER ####
+fileConfiguration = json.loads(readFile("", "config.json"))
+
+
+configMain = fileConfiguration["main_configuration"]
+configModel = fileConfiguration["model_configuration"]
+configBehaviour = fileConfiguration["behavioural_configuration"]
+configStableDiffusion = fileConfiguration["stable_diffusion_configuration"]
+
+
+# main configs
+if not configMain["address"].endswith("/v1"):
+    newAddress = configMain["address"]
+    if not newAddress.endswith("/"):
+        newAddress += "/"
+    openai.api_base = newAddress + "v1"
+
+
+intResponseTimeout              = configMain["response_timeout_seconds"]
+
+
+# model configs
+currentModel = getModelByName(configModel["default_model"])
+if currentModel is None:
+    printRed("\nYour default model is missing from models.json! Please fix your configuration.")
+    exit()
+
+
+# behavioural configs
+strSystemPrompt                 = configBehaviour["system_prompt"]
+shouldAutomaticallySwitchModels = configBehaviour["enable_automatic_model_switching"]
+shouldConsiderHistory           = configBehaviour["enable_chat_history_consideration"]
+shouldUseInternet               = configBehaviour["enable_internet"]
+intMaxSourcesPerSearch          = configBehaviour["max_sources_per_search"]
+intMaxSentencesPerSource        = configBehaviour["max_sentences_per_source"]
+shouldAutomaticallyOpenFiles    = configBehaviour["automatically_open_files"]
+
+
+# STABLEDIFFUSION CONFIGURATION #
+strModelStableDiffusion         = configStableDiffusion["stable_diffusion_model"]
+strImageSize                    = configStableDiffusion["stable_diffusion_image_size"]
 
 
 #################################################
@@ -271,10 +282,9 @@ def command_convo():
 
 
 def command_model():
-    global currentModel
     printGeneric("\nAvailable models:\n")
-    for model in fileModelsConfiguration:
-        printGeneric(model["model_name"])
+    for model in fileModelsConfiguration.keys():
+        printGeneric(model)
     printGeneric("")
     printSeparator()
     nextModel = printInput("Select a model (leave empty for current '" + getCurrentModelName() + "'): ")
@@ -287,6 +297,7 @@ def command_model():
         if nextModelObj is None:
             printRed("\nCan't find a match - keeping current model: " + getCurrentModelName())
         else:
+            global currentModel
             currentModel = nextModelObj
             printGreen("\nChat model set to: " + getCurrentModelName())
     printGeneric("")
@@ -478,13 +489,24 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     return
 
 
+# TODO:
+# APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
+# for file operations, catch "dangerous" actions (edit system files, etc.)
+
+
 actionEnums = [
     "SEARCH_INTERNET_WITH_SEARCH_TERM",
-    #"GENERATE_IMAGE_WITH_DESCRIPTION"
+    #"GENERATE_IMAGE_WITH_DESCRIPTION",
+    "GET_UPDATED_LOCATION_DATA",
+    "GET_UPDATED_TIME_AND_DATE_DATA",
 ]
 
 
-strFunctionSystemPrompt = "Determine if it is necessary to perform additional actions in order to complete the USER's request. Create an action plan in the form of an array, if actions are necessary. Otherwise, create an blank array. Available actions are: '" + formatArrayToString(actionEnums, "', '") + "'."
+strFunctionSystemPrompt = """Determine if it is necessary to perform additional actions in order to provide an accurate response to the USER's request.
+Create an action plan in the form of an array, if actions are necessary.
+Otherwise, create an blank array.
+Available actions are: '""" + formatArrayToString(actionEnums, "', '") + """'.
+You will get updated location, time and date data when it is applicable to the USER's inquiry."""
 
 
 function = [{
@@ -498,6 +520,7 @@ function = [{
                     " Actions should only be added when it is necessary to accurately respond to the prompt." +
                     " Available actions are: '" + formatArrayToString(actionEnums, "', '") + "'." +
                     " Each item in the array consists of a single action with its corresponding input data for the action." +
+                    " Use placeholders in input data when the input data should be generated by preceding steps." + 
                     " Duplicate actions are permitted only when the input data is different between each action." +
                     " If no additional actions are to be completed, then create an empty array with no items.",
                 "items": {
@@ -506,31 +529,29 @@ function = [{
                         "action": {
                             "type": "string",
                             "description": "The action to be completed at this step of the action plan." +
+" Use 'GET_UPDATED_LOCATION_DATA' to get our current location, and should also be used when USER is prompting on local information." +
+" Use 'GET_UPDATED_TIME_AND_DATE_DATA' to get our current date and time, and should also be used when USER is prompting on updated information." +
 " Use 'SEARCH_INTERNET_WITH_SEARCH_TERM' to research a single topic or subject using updated information from the internet.",
-#" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested",
+#" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested" +
                             "enum": actionEnums,
                         },
                         "action_input_data": {
                             "type": "string",
-                            "description": "The input data that corresponds to this specific action." + 
-" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms that will be used to search for updated information on the internet."
-#" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created.",
+                            "description": "The input data that corresponds to this specific action." +
+" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms that will be used to search for information on the internet.",
+#" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created." +
                         }
                     }
                 }
             }
-        },
-        #"required": ["actions_array"]
+        }
     }
 }]
 
 
 def getFunctionResponse(promptIn):
-    # TODO:
-    # APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
-    # for file operations, catch "dangerous" actions (edit system files, etc.)
-    
-    resetCurrentModel()
+    if shouldAutomaticallySwitchModels:
+        resetCurrentModel()
     
     hrefs = []
     searchedTerms = []
@@ -561,7 +582,7 @@ def getFunctionResponse(promptIn):
         # print all actions to do
         if len(actionsResponse.get("actions_array")) > 0 and len(actionsResponse.get("actions_array")[0]) > 0:
             for action in actionsResponse.get("actions_array"):
-                printDebug(" - '" + action.get("action") +"': " + action.get("action_input_data"))
+                printDebug(" - " + action.get("action") +": " + action.get("action_input_data"))
         else:
             printDebug("(None)")
         
@@ -603,10 +624,31 @@ def getFunctionResponse(promptIn):
                             printError("\nNo search term provided.")
                 case "GENERATE_IMAGE_WITH_DESCRIPTION":
                     getImageResponse(theActionInputData)
+                case "GET_UPDATED_LOCATION_DATA":
+                    ipRequest = requests.get('https://api64.ipify.org?format=json').json()
+                    printDump("\nIP result: " + str(ipRequest))
+                    ip = ipRequest["ip"]
+                    loc = requests.get(f'https://ipapi.co/{ip}/json/').json()
+                    if loc.get("error") is None:
+                        printDump("\nLocation result: " + str(loc))
+                        fullAddr = loc.get("city") + ", " + loc.get("region") + ", " + loc.get("country_name")
+                        for a in actionsResponse.get("actions_array"):
+                            d = a.get("action_input_data").replace("{location}", fullAddr)
+                        datas.append("Current location is: " + fullAddr)
+                        printDebug("\nLocation placeholders updated.")
+                    else:
+                        errorReason = loc.get("reason")
+                        printError("\nError while getting location: " + errorReason)
+                        printError("Skipping fetching location - response may not be accurate!")
+                case "GET_UPDATED_TIME_AND_DATE_DATA":
+                    now = str(datetime.datetime.now())
+                    printDump("\nTime: " + now)
+                    for a in actionsResponse.get("actions_array"):
+                        d = a.get("action_input_data").replace("{time_and_date}", now)
+                    datas.append("The current time is: " + now)
+                    printDebug("\nTime placeholders updated.")
                 case _:
                     printError("\nUnrecognized action: " + action)
-                    printError("Breaking out of loop.")
-                    break
     else:
         printError("\nNo response - defaulting to chat completion.")
         getChatCompletionResponse(promptIn, shouldWriteDataToConvo = True)
@@ -646,6 +688,8 @@ def getModelResponse(promptIn):
     if not shouldAutomaticallySwitchModels:
         return currentModel
     else:
+        resetCurrentModel()
+        
         promptMessage = addToPrompt([], "system", strDetermineBestAssistant + getEnabledModelDescriptions())
         promptMessage = addToPrompt(promptMessage, "user", promptIn)
         
@@ -739,18 +783,6 @@ def getPromptHistory():
     if s is not None:
         promptHistory = addToPrompt(promptHistory, s[0].lower(), s[1])
     return promptHistory
-
-
-def getRoleAndContentFromString(stringIn):
-    if len(stringIn) > 0:
-        separator = ": "
-        split = stringIn.split(separator)
-        if len(split) == 2:
-            return split
-        else:
-            printDebug("The following string is not in a valid role-content form!")
-            printDebug(stringIn)
-    return None
 
 
 ##################################################

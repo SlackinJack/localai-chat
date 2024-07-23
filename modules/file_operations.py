@@ -4,6 +4,10 @@ import glob
 from pathlib import Path
 
 
+def getFilePathFromPrompt(stringIn):
+    return (re.findall(r"'(.*?)'", stringIn, re.DOTALL))
+
+
 def readFile(pathIn, filenameIn = "", splitter = ""):
     testpath = Path(pathIn + filenameIn)
     if testpath.is_file() is not True:
