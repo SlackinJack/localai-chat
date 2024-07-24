@@ -97,7 +97,7 @@ def getModelList():
         text = True
     ).stdout
     printDump("\n" + result + "\n")
-    if result is not None:
+    if result is not None and not checkEmptyString(result):
         return json.loads(result)["data"]
     else:
         printDebug("\nError getting model list.\n")

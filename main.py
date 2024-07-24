@@ -27,6 +27,7 @@ from modules.utils_web import *
 # - organize commands
 # - add up-down arrow key support
 # - config reload command
+# - image seeds, retries
 
 
 #################################################
@@ -287,7 +288,8 @@ def command_settings():
 def command_image():
     imageDesc = printInput("Enter image description: ")
     printSeparator()
-    printResponse("\n" + getImageResponse(imageDesc) + "\n")
+    if not checkEmptyString(imageDesc):
+        printResponse("\n" + getImageResponse(imageDesc) + "\n")
     return
 
 
@@ -359,7 +361,7 @@ def command_image_model():
             printRed("\nCan't find a match - keeping current model: " + currentImageModel)
         else:
             currentImageModel = nextModelObj
-            printGreen("\Image model set to: " + currentImageModel)
+            printGreen("\nImage model set to: " + currentImageModel)
     printGeneric("")
     return
 
