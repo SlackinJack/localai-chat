@@ -5,6 +5,7 @@ import os
 import re
 import requests
 import time
+import urllib
 
 
 from difflib import SequenceMatcher
@@ -22,6 +23,10 @@ from modules.utils_web import *
 # - fix target links being smashed together
 # - fix location and time in prompts
 # - add more (comprehensive) tests
+# - test file ops
+# - organize commands
+# - add up-down arrow key support
+# - config reload command
 
 
 #################################################
@@ -30,7 +35,7 @@ from modules.utils_web import *
 
 
 #### STATIC CONFIGURATION ####
-stopwords = ["|im_end>", "\n\n\n\n\n", "</s>"]
+stopwords = ["|im_end|>", "\n\n\n\n\n", "</s>"]
 openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
 strRespondUsingInformation = "Provide a response that is restricted to the information contained in the following data: "
 strDetermineBestAssistant = "Use the following descriptions of each assistant to determine which assistant has the most relevant skills related to the task given by USER: "
@@ -90,7 +95,6 @@ fileConfiguration = json.loads(readFile("", "config.json"))
 configMain = fileConfiguration["main_configuration"]
 configModel = fileConfiguration["model_configuration"]
 configBehaviour = fileConfiguration["behavioural_configuration"]
-configStableDiffusion = fileConfiguration["stable_diffusion_configuration"]
 
 
 # main configs
@@ -102,10 +106,15 @@ if not configMain["address"].endswith("/v1"):
 
 
 intResponseTimeout              = configMain["response_timeout_seconds"]
+shouldDeleteOutputFilesOnExit   = configMain["delete_output_files_on_exit"]
+shouldAutomaticallyOpenFiles    = configMain["automatically_open_files"]
 
 
 # model configs
 currentModel                    = getModelByName(configModel["default_model"])
+strSystemPrompt                 = configModel["system_prompt"]
+strModelStableDiffusion         = configModel["stable_diffusion_model"]
+strImageSize                    = configModel["stable_diffusion_image_size"]
 
 
 if currentModel is None:
@@ -114,18 +123,12 @@ if currentModel is None:
 
 
 # behavioural configs
-strSystemPrompt                 = configBehaviour["system_prompt"]
+shouldUseFunctions              = configBehaviour["enable_functions"]
+shouldUseInternet               = configBehaviour["enable_internet"]
 shouldAutomaticallySwitchModels = configBehaviour["enable_automatic_model_switching"]
 shouldConsiderHistory           = configBehaviour["enable_chat_history_consideration"]
-shouldUseInternet               = configBehaviour["enable_internet"]
 intMaxSourcesPerSearch          = configBehaviour["max_sources_per_search"]
 intMaxSentencesPerSource        = configBehaviour["max_sentences_per_source"]
-shouldAutomaticallyOpenFiles    = configBehaviour["automatically_open_files"]
-
-
-# stable diffusion configs #
-strModelStableDiffusion         = configStableDiffusion["stable_diffusion_model"]
-strImageSize                    = configStableDiffusion["stable_diffusion_image_size"]
 
 
 #################################################
@@ -215,12 +218,15 @@ def trigger_openFile(promptIn):
         if checkEmptyString(fileContent):
             fileContent = errorBlankEmptyText("file")
         else:
-            # check for websites in file
-            words = re.split(' |\n|\r|\)|\]|\}|\>', fileContent)
-            for word in words:
-                if word.startswith("http://") or word.startswith("https://"):
-                    detectedWebsites.append(word)
-                    printDebug("Found website in file: " + word)
+            if not shouldUseInternet:
+                printDebug("\nInternet is disabled - skipping embedded website check.\n")
+            else:
+                # check for websites in file
+                words = re.split(' |\n|\r|\)|\]|\}|\>', fileContent)
+                for word in words:
+                    if word.startswith("http://") or word.startswith("https://"):
+                        detectedWebsites.append(word)
+                        printDebug("Found website in file: " + word)
         fileContents.append("File: '" + fileName + "': " + fileContent)
         if len(detectedWebsites) > 0:
             for website in detectedWebsites:
@@ -266,6 +272,13 @@ def command_settings():
     printCurrentSystemPrompt(printGeneric)
     
     printGeneric("")
+    return
+
+
+def command_image():
+    imageDesc = printInput("Enter image description: ")
+    printSeparator()
+    printResponse("\n" + getImageResponse(imageDesc) + "\n")
     return
 
 
@@ -395,14 +408,9 @@ def command_system_prompt():
 
 
 def command_selftest():
-    # TODO:
-    # - add stable diffusion test(s)
-    
-    result = printInput("The program will self-test. Do you want to continue? (y/n): ")
-    printSeparator()
-    if result.lower() == "y":
+    if printYNQuestion("The program will self-test. Do you want to continue?"):
         passes = 0
-        target = 6
+        target = 7
         
         printGeneric("\nTesting chat completion...\n")
         getChatCompletionResponse("Hi there, how are you?", ["Respond to USER in a respectful manner."], True)
@@ -438,6 +446,11 @@ def command_selftest():
         printGreen("\nYouTube test passed!\n")
         passes += 1
         
+        printGeneric("\nTesting Stable Diffusion...\n")
+        getImageResponse("A red box")
+        printGreen("\nStable Diffusion test passed!\n")
+        passed += 1
+        
         if passes == target:
             printGreen("\nAll tests passed!\n")
         else:
@@ -446,6 +459,17 @@ def command_selftest():
 
 
 def command_exit():
+    for conversation in os.listdir("conversations"):
+        if conversation.endswith(".convo"):
+            if checkEmptyString(readFile("conversations/", conversation)):
+                deleteFile("conversations/", conversation)
+                printDebug("\nDeleted empty conversation file: " + conversation + "\n")
+    
+    if shouldDeleteOutputFilesOnExit:
+        for outputFile in os.listdir("output"):
+            if not outputFile == ".keep":
+                deleteFile("output/", outputFile)
+                printDebug("\nDeleted output file: " + outputFile + "\n")
     exit()
     return
 
@@ -456,13 +480,14 @@ commandMap = {
     command_convo: ["/convo"],
     command_curl: ["/curl"],
     command_history: ["/history"],
+    command_image: ["/image"],
     command_model: ["/model"],
     command_online: ["/online"],
     command_sd_model: ["/sdmodel"],
     command_selftest: ["/selftest"],
     command_settings: ["/settings"],
-    command_system_prompt: ["/system", "/systemprompt"],
     command_switcher: ["/switcher"],
+    command_system_prompt: ["/system", "/systemprompt"],
     command_exit: ["/exit"]
 }
 
@@ -557,20 +582,16 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     return
 
 
-# TODO:
-# APPEND_TO_FILE, READ_FILE, DELETE_FILE, ...
-# for file operations, catch "dangerous" actions (edit system files, etc.)
-
-
 actionEnums = [
     "SEARCH_INTERNET_WITH_SEARCH_TERM",
-    #"GENERATE_IMAGE_WITH_DESCRIPTION",
+    "GENERATE_IMAGE_WITH_DESCRIPTION",
     "GET_UPDATED_LOCATION_DATA",
     "GET_UPDATED_TIME_AND_DATE_DATA",
+    "WRITE_FILE_TO_FILESYSTEM"
 ]
 
 
-strFunctionSystemPrompt = """Determine if it is necessary to perform additional actions in order to provide an accurate response to the USER's request.
+strFunctionSystemPrompt = """Determine if it is necessary to perform additional actions in order to fulfill the tasks given by, and/or to provide an accurate response to, the USER's requests.
 Create an action plan in the form of an array, if actions are necessary.
 Otherwise, create an blank array.
 Available actions are: '""" + formatArrayToString(actionEnums, "', '") + """'.
@@ -599,15 +620,17 @@ function = [{
                             "description": "The action to be completed at this step of the action plan." +
 " Use 'GET_UPDATED_LOCATION_DATA' to get our current location, and should also be used when USER is prompting on local information." +
 " Use 'GET_UPDATED_TIME_AND_DATE_DATA' to get our current date and time, and should also be used when USER is prompting on updated information." +
-" Use 'SEARCH_INTERNET_WITH_SEARCH_TERM' to research a single topic or subject using updated information from the internet.",
-#" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested" +
+" Use 'SEARCH_INTERNET_WITH_SEARCH_TERM' to research a single topic or subject using updated information from the internet." +
+" Use 'GENERATE_IMAGE_WITH_DESCRIPTION' to create an artificial image, only when explicitly requested." +
+" Use 'WRITE_FILE_TO_FILESYSTEM' to create a new file on the filesystem.",
                             "enum": actionEnums,
                         },
                         "action_input_data": {
                             "type": "string",
                             "description": "The input data that corresponds to this specific action." +
-" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms that will be used to search for information on the internet.",
-#" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created." +
+" If the action is 'SEARCH_INTERNET_WITH_SEARCH_TERM', then provide the search terms that will be used to search for information on the internet." +
+" If the action is 'GENERATE_IMAGE_WITH_DESCRIPTION', then provide a brief detailed description of the image to be created." +
+" If the action is 'WRITE_FILE_TO_FILESYSTEM', then provide the name for the file, a colon and a space, and then the contents of the file inside of curly braces.",
                         }
                     }
                 }
@@ -659,6 +682,8 @@ def getFunctionResponse(promptIn):
             theAction = action.get("action")
             theActionInputData = action.get("action_input_data")
             match theAction:
+                
+                
                 case "SEARCH_INTERNET_WITH_SEARCH_TERM":
                     if not shouldUseInternet:
                         printDebug("\nInternet is disabled - skipping this action. ('" + theAction + "': " + theActionInputData + ")")
@@ -690,24 +715,35 @@ def getFunctionResponse(promptIn):
                                 printError("\nSkipping duplicated search term: " + theActionInputData)
                         else:
                             printError("\nNo search term provided.")
+                
+                
                 case "GENERATE_IMAGE_WITH_DESCRIPTION":
-                    getImageResponse(theActionInputData)
+                    printGeneric("\nThe model wants to create an image with the following description: " + theActionInputData + "\n")
+                    if printYNQuestion("Do you want to allow this action?"):
+                        printResponse(getImageResponse(theActionInputData))
+                
+                
                 case "GET_UPDATED_LOCATION_DATA":
-                    ipRequest = requests.get('https://api64.ipify.org?format=json').json()
-                    printDump("\nIP result: " + str(ipRequest))
-                    ip = ipRequest["ip"]
-                    loc = requests.get(f'https://ipapi.co/{ip}/json/').json()
-                    if loc.get("error") is None:
-                        printDump("\nLocation result: " + str(loc))
-                        fullAddr = loc.get("city") + ", " + loc.get("region") + ", " + loc.get("country_name")
-                        for a in actionsResponse.get("actions_array"):
-                            d = a.get("action_input_data").replace("{location}", fullAddr)
-                        datas.append("Current location is: " + fullAddr)
-                        printDebug("\nLocation placeholders updated.")
+                    if not shouldUseInternet:
+                        printDebug("\nInternet is disabled - skipping this action. ('" + theAction + "': " + theActionInputData + ")")
                     else:
-                        errorReason = loc.get("reason")
-                        printError("\nError while getting location: " + errorReason)
-                        printError("Skipping fetching location - response may not be accurate!")
+                        ipRequest = requests.get('https://api64.ipify.org?format=json').json()
+                        printDump("\nIP result: " + str(ipRequest))
+                        ip = ipRequest["ip"]
+                        loc = requests.get(f'https://ipapi.co/{ip}/json/').json()
+                        if loc.get("error") is None:
+                            printDump("\nLocation result: " + str(loc))
+                            fullAddr = loc.get("city") + ", " + loc.get("region") + ", " + loc.get("country_name")
+                            for a in actionsResponse.get("actions_array"):
+                                d = a.get("action_input_data").replace("{location}", fullAddr)
+                            datas.append("Current location is: " + fullAddr)
+                            printDebug("\nLocation placeholders updated.")
+                        else:
+                            errorReason = loc.get("reason")
+                            printError("\nError while getting location: " + errorReason)
+                            printError("Skipping fetching location - response may not be accurate!")
+                
+                
                 case "GET_UPDATED_TIME_AND_DATE_DATA":
                     now = str(datetime.datetime.now())
                     printDump("\nTime: " + now)
@@ -715,6 +751,20 @@ def getFunctionResponse(promptIn):
                         d = a.get("action_input_data").replace("{time_and_date}", now)
                     datas.append("The current time is: " + now)
                     printDebug("\nTime placeholders updated.")
+                
+                
+                case "WRITE_FILE_TO_FILESYSTEM":
+                    fileName = theActionInputData.split(": ")[0]
+                    fileContents = theActionInputData.replace(fileName + ": ", "")
+                    printGeneric("\nThe model wants to write the following file: " + fileName + ", with the following contents:\n")
+                    printGreen(fileContents + "\n")
+                    if printYNQuestion("Do you want to allow this action?"):
+                        appendFile("output/", fileName, fileContents + "\n")
+                        printGreen("\nFile has been written.")
+                    else:
+                        printRed("\nWill not write file, continuing...")
+                
+                
                 case _:
                     printError("\nUnrecognized action: " + action)
     else:
@@ -742,11 +792,12 @@ def getImageResponse(promptIn):
     if theURL is not None:
         split = theURL.split("/")
         filename = split[len(split) - 1]
+        filename = "output/" + filename
         urllib.request.urlretrieve(theURL, filename)
         if shouldAutomaticallyOpenFiles:
             openLocalFile(filename)
         # TODO: file management
-        return "Your image is available at:\n\n" + completion.data[0].url
+        return "Your image is available at: " + filename
     else:
         printError("\nImage creation failed!\n")
         return ""
@@ -780,7 +831,11 @@ def handlePrompt(promptIn):
     if checkCommands(promptIn) == False:
         if checkTriggers(promptIn) == False:
             tic = time.perf_counter()
-            getFunctionResponse(promptIn)
+            if shouldUseFunctions:
+                getFunctionResponse(promptIn)
+            else:
+                printDebug("Functions are disabled - using chat completion only")
+                getChatCompletionResponse(promptIn)
             toc = time.perf_counter()
             printDebug(f"\n\n{toc - tic:0.3f} seconds")
             printGeneric("")
@@ -864,5 +919,8 @@ while True:
     printSeparator()
     strPrompt = printInput("Enter a prompt ('/help' for list of commands): ")
     printSeparator()
-    handlePrompt(strPrompt)
+    if not checkEmptyString(strPrompt):
+        handlePrompt(strPrompt)
+    else:
+        command_help()
 

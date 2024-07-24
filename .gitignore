@@ -6,3 +6,6 @@ modules/__pycache__
 modules/__pycache__/*
 conversations/*
 !conversations/.keep
+output/*
+!output/.keep
+

@@ -1,4 +1,5 @@
 import glob
+import os
 import re
 
 
@@ -38,6 +39,15 @@ def appendFile(pathIn, filenameIn, strIn):
     openFile = open(pathIn + filenameIn, "a")
     openFile.write(strIn)
     openFile.close()
+    return
+
+
+def deleteFile(pathIn, filenameIn):
+    testpath = Path(pathIn + filenameIn)
+    if testpath.is_file() is not True:
+        printDebug("Tried to delete a non-existent file at: " + str(testpath))
+    else:
+        os.remove(testpath)
     return
 
 

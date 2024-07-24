@@ -12,9 +12,7 @@ from termcolor import colored
 from modules.file_operations import *
 
 
-# Configuration (for debug levels)
-fileConfiguration = json.loads(readFile("", "config.json"))
-debugLevel = fileConfiguration["main_configuration"]["debug_level"]
+debugLevel = (json.loads(readFile("", "config.json")))["main_configuration"]["debug_level"]
 
 
 ##################################################
@@ -126,6 +124,13 @@ def printOpenAIError(error, iteration):
 def printFormattedJson(jsonIn, printFunc=printDump):
     printFunc(json.dumps(jsonIn, sort_keys=True, indent=4))
     return
+
+
+def printYNQuestion(messageIn):
+    printSeparator()
+    result = printInput(messageIn + " (Y/n): ")
+    printSeparator()
+    return result.lower() == "y"
 
 
 ##################################################

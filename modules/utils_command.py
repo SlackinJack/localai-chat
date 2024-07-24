@@ -4,6 +4,9 @@ import subprocess
 from modules.utils import *
 
 
+address = (json.loads(readFile("", "config.json")))["main_configuration"]["address"]
+
+
 availableCommands = [
     "apply",
     "available",
@@ -37,10 +40,10 @@ def sendCurlCommand():
     printSeparator()
     cmdType = printInput("Enter the command type: " ).lower()
     printSeparator()
-    if configuration["ADDRESS"].endswith("/"):
-        cmdStringBuilder += configuration["ADDRESS"]
+    if address.endswith("/"):
+        cmdStringBuilder += address
     else:
-        cmdStringBuilder += configuration["ADDRESS"] + "/"
+        cmdStringBuilder += address + "/"
     isFunction = False
     match cmdType:
         case "apply":
