@@ -3,15 +3,16 @@
         "switchable": true,
         "description": "Nous is a general-purpose assistant."
     },
-    
     "code-13b": {
         "switchable": true,
         "description": "Code is an assistant who is trained for general programming, code and coding, software development."
     },
-    
     "samantha-13b": {
         "switchable": true,
         "description": "Samantha is an assistant who is trained for philosophy and personal relationships."
+    },
+    "stablediffusion": {
+        "switchable": false,
+        "description": ""
     }
 }
-

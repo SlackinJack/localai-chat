@@ -1,3 +1,4 @@
+import json
 import subprocess
 
 
@@ -16,9 +17,9 @@ availableCommands = [
 ]
 
 
-def printStdout(errorsIn):
-    if errorsIn is not None and len(errorsIn) > 0:
-        j = json.loads(errorsIn)
+def printStdout(stdoutIn):
+    if stdoutIn is not None and len(stdoutIn) > 0:
+        j = json.loads(stdoutIn)
         printGeneric("")
         if j is not None and "error" in j and not '"error:null"' in j:
             printRed("Response:")
@@ -36,14 +37,12 @@ def sendCurlCommand():
     for c in availableCommands:
         printGeneric("- " + c)
     printGeneric("")
-    cmdStringBuilder = "curl "
+    cmdStringBuilder = "curl " + address
     printSeparator()
     cmdType = printInput("Enter the command type: " ).lower()
     printSeparator()
-    if address.endswith("/"):
-        cmdStringBuilder += address
-    else:
-        cmdStringBuilder += address + "/"
+    if not address.endswith("/"):
+        cmdStringBuilder += "/"
     isFunction = False
     match cmdType:
         case "apply":
@@ -85,4 +84,23 @@ def sendCurlCommand():
         ).stdout
     )
     return
+
+
+def getModelList():
+    cmdStringBuilder = "curl " + address
+    if not address.endswith("/"):
+        cmdStringBuilder += "/"
+    cmdStringBuilder += "v1/models"
+    result = subprocess.run(
+        cmdStringBuilder.split(" "),
+        capture_output = True,
+        text = True
+    ).stdout
+    printDump("\n" + result + "\n")
+    if result is not None:
+        return json.loads(result)["data"]
+    else:
+        printDebug("\nError getting model list.\n")
+        return None
+
 

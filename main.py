@@ -27,6 +27,7 @@ from modules.utils_web import *
 # - organize commands
 # - add up-down arrow key support
 # - config reload command
+# - y/n bypass toggle
 
 
 #################################################
@@ -115,6 +116,7 @@ currentModel                    = getModelByName(configModel["default_model"])
 strSystemPrompt                 = configModel["system_prompt"]
 strModelStableDiffusion         = configModel["stable_diffusion_model"]
 strImageSize                    = configModel["stable_diffusion_image_size"]
+lstIgnoredModelNames            = configModel["model_scanner_ignored_filenames"]
 
 
 if currentModel is None:
@@ -258,6 +260,7 @@ triggerMap = {
 
 def command_settings():
     printGeneric("\nSettings:")
+    printSetting(shouldUseFunctions, "Functions")
     printSetting(shouldUseInternet, "Auto Internet Search")
     printSetting(shouldAutomaticallySwitchModels, "Automatically Switch Models")
     printSetting(shouldConsiderHistory, "Consider Chat History")
@@ -340,6 +343,46 @@ def command_sd_model():
     strModelStableDiffusion = model
     printSeparator()
     printGreen("\nStable Diffusion model set to: " + model + "\n")
+    return
+
+
+def command_modelscanner():
+    modelList = getModelList()
+    if modelList is not None:
+        global fileModelsConfiguration
+        
+        addModels = {}
+        for model in modelList:
+            if not model["id"] in lstIgnoredModelNames and not model["id"] in fileModelsConfiguration.keys():
+                # add the model
+                printDebug(model["id"] + " is missing from model config")
+                addModels[model["id"]] = {"switchable": False, "description": ""}
+        
+        printDebug("")
+
+        newModelsJson = fileModelsConfiguration | addModels
+        outputFileString = json.dumps(newModelsJson, indent=4)
+        
+        printDump("\nNew models.json:\n\n" + outputFileString + "\n")
+        
+        deleteFile("", "models.json")
+        appendFile("", "models.json", outputFileString)
+        
+        fileModelsConfiguration = json.loads(readFile("", "models.json"))
+        
+        printGeneric("\nSuccessfully updated your models.json!\n")
+    else:
+        printGeneric("\nCould not update your models.json. (Check your connection?)\n")
+    return
+
+
+def command_functions():
+    global shouldUseFunctions
+    shouldUseFunctions = not shouldUseFunctions
+    if shouldUseFunctions:
+        printGreen("\nNow using functions for prompts!\n")
+    else:
+        printRed("\nNot using functions for prompts!\n")
     return
 
 
@@ -475,20 +518,22 @@ def command_exit():
 
 
 commandMap = {
-    command_help: ["", "/help"],
-    command_clear: ["/clear"],
-    command_convo: ["/convo"],
-    command_curl: ["/curl"],
-    command_history: ["/history"],
-    command_image: ["/image"],
-    command_model: ["/model"],
-    command_online: ["/online"],
-    command_sd_model: ["/sdmodel"],
-    command_selftest: ["/selftest"],
-    command_settings: ["/settings"],
-    command_switcher: ["/switcher"],
-    command_system_prompt: ["/system", "/systemprompt"],
-    command_exit: ["/exit"]
+    command_help:               ["", "/help"],
+    command_clear:              ["/clear"],
+    command_convo:              ["/convo"],
+    command_curl:               ["/curl"],
+    command_functions:          ["/functions"],
+    command_history:            ["/history"],
+    command_image:              ["/image"],
+    command_model:              ["/model"],
+    command_modelscanner:       ["/modelscanner"],
+    command_online:             ["/online"],
+    command_sd_model:           ["/sdmodel"],
+    command_selftest:           ["/selftest"],
+    command_settings:           ["/settings"],
+    command_switcher:           ["/switcher"],
+    command_system_prompt:      ["/system", "/systemprompt"],
+    command_exit:               ["/exit"]
 }
 
 

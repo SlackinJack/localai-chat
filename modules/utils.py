@@ -13,6 +13,7 @@ from modules.file_operations import *
 
 
 debugLevel = (json.loads(readFile("", "config.json")))["main_configuration"]["debug_level"]
+bypassYN = (json.loads(readFile("", "config.json")))["main_configuration"]["always_yes_to_yn_operations"]
 
 
 ##################################################
@@ -127,10 +128,13 @@ def printFormattedJson(jsonIn, printFunc=printDump):
 
 
 def printYNQuestion(messageIn):
-    printSeparator()
-    result = printInput(messageIn + " (Y/n): ")
-    printSeparator()
-    return result.lower() == "y"
+    if bypassYN:
+        return True
+    else:
+        printSeparator()
+        result = printInput(messageIn + " (Y/n): ")
+        printSeparator()
+        return result.lower() == "y"
 
 
 ##################################################

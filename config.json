@@ -13,7 +13,10 @@
         "delete_output_files_on_exit": false,
         
         "automatically_open_output_files_desc": "automatically open output files",
-        "automatically_open_files": true
+        "automatically_open_files": false,
+        
+        "always_yes_to_yn_operations_desc": "always answer 'yes' to operations asking for confirmation (careful!)",
+        "always_yes_to_yn_operations": false
     },
     
     "model_configuration": {
@@ -27,7 +30,15 @@
         "stable_diffusion_model": "stablediffusion",
         
         "stable_diffusion_image_size_desc": "set the resolution for stable diffusion images",
-        "stable_diffusion_image_size": "512x512"
+        "stable_diffusion_image_size": "512x512",
+        
+        "model_scanner_ignored_filenames_desc": "a list of filenames to ignore when scanning for models",
+        "model_scanner_ignored_filenames": [
+            "assets",
+            "configs",
+            "version.txt",
+            "version_diffusers_cache.txt"
+        ]
     },
     
     "behavioural_configuration": {
