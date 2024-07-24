@@ -28,6 +28,7 @@ from modules.utils_web import *
 # - add up-down arrow key support
 # - config reload command
 # - image seeds, retries
+# - support newer localAI and features
 
 
 #################################################
@@ -289,7 +290,13 @@ def command_image():
     imageDesc = printInput("Enter image description: ")
     printSeparator()
     if not checkEmptyString(imageDesc):
-        printResponse("\n" + getImageResponse(imageDesc) + "\n")
+        while True:
+            tic = time.perf_counter()
+            printResponse("\n" + getImageResponse(imageDesc) + "\n")
+            toc = time.perf_counter()
+            printDebug(f"\n\n{toc - tic:0.3f} seconds")
+            if not printYNQuestion("Do you want to regenerate the image with the same prompt?"):
+                break
     return
 
 

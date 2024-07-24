@@ -127,8 +127,8 @@ def printFormattedJson(jsonIn, printFunc=printDump):
     return
 
 
-def printYNQuestion(messageIn):
-    if bypassYN:
+def printYNQuestion(messageIn, override=False):
+    if bypassYN and not override:
         return True
     else:
         printSeparator()
