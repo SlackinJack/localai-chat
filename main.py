@@ -27,7 +27,6 @@ from modules.utils_web import *
 # - organize commands
 # - add up-down arrow key support
 # - config reload command
-# - y/n bypass toggle
 
 
 #################################################
@@ -46,26 +45,30 @@ strDetermineBestAssistant = "Use the following descriptions of each assistant to
 fileModelsConfiguration = json.loads(readFile("", "models.json"))
 
 
-def getModelByName(modelNameIn):
-    for model in fileModelsConfiguration.keys():
-        if modelNameIn in model or modelNameIn == model:
+def getModelByName(modelNameIn, textModel = True):
+    for model, modelMetadata in fileModelsConfiguration.items():
+        if (modelNameIn in model or modelNameIn == model) and modelMetadata["text_model"] == textModel:
             return model
     return None
 
 
-def getCurrentModelName():
-    return currentModel
-
-
 def resetCurrentModel():
     global currentModel
-    currentModel = getModelByName(configModel["default_model"])
+    currentModel = getModelByName(configModel["default_model"], True)
     return
+
+
+def getModels(textModels = True):
+    out = {}
+    for model, modelMetadata in fileModelsConfiguration.items():
+        if modelMetadata["text_model"] == textModels:
+            out[model] = modelMetadata
+    return out
 
 
 def getEnabledModelNames():
     out = []
-    for model, modelMetadata in fileModelsConfiguration.items():
+    for model, modelMetadata in getModels(True):
         if modelMetadata["switchable"]:
             out.append(model)
     return out
@@ -73,7 +76,7 @@ def getEnabledModelNames():
 
 def getEnabledModelDescriptions():
     out = ""
-    for model, modelMetadata in fileModelsConfiguration.items():
+    for model, modelMetadata in getModels(True):
         if modelMetadata["switchable"]:
             if len(out) > 0:
                 out += " "
@@ -112,10 +115,10 @@ shouldAutomaticallyOpenFiles    = configMain["automatically_open_files"]
 
 
 # model configs
-currentModel                    = getModelByName(configModel["default_model"])
+currentModel                    = getModelByName(configModel["default_model"], True)
 strSystemPrompt                 = configModel["system_prompt"]
-strModelStableDiffusion         = configModel["stable_diffusion_model"]
-strImageSize                    = configModel["stable_diffusion_image_size"]
+currentImageModel               = configModel["default_image_model"]
+strImageSize                    = configModel["image_size"]
 lstIgnoredModelNames            = configModel["model_scanner_ignored_filenames"]
 
 
@@ -266,7 +269,10 @@ def command_settings():
     printSetting(shouldConsiderHistory, "Consider Chat History")
     
     printGeneric("\nModel:")
-    printGeneric(getCurrentModelName())
+    printGeneric(currentModel)
+    
+    printGeneric("\nImage model:")
+    printGeneric(currentImageModel)
     
     printGeneric("\nConversation file:")
     printGeneric(strConvoName + ".convo")
@@ -313,36 +319,48 @@ def command_convo():
 
 
 def command_model():
+    global currentModel
     printGeneric("\nAvailable models:\n")
-    for model in fileModelsConfiguration.keys():
+    for model in getModels(True):
         printGeneric(model)
     printGeneric("")
     printSeparator()
-    nextModel = printInput("Select a model (leave empty for current '" + getCurrentModelName() + "'): ")
+    nextModel = printInput("Select a model (leave empty for current '" + currentModel + "'): ")
     printSeparator()
     nextModelObj = None
     if len(nextModel) == 0:
-        printRed("\nKeeping current model: " + getCurrentModelName())
+        printRed("\nKeeping current model: " + currentModel)
     else:
-        nextModelObj = getModelByName(nextModel)
+        nextModelObj = getModelByName(nextModel, True)
         if nextModelObj is None:
-            printRed("\nCan't find a match - keeping current model: " + getCurrentModelName())
+            printRed("\nCan't find a match - keeping current model: " + currentModel)
         else:
-            global currentModel
             currentModel = nextModelObj
-            printGreen("\nChat model set to: " + getCurrentModelName())
+            printGreen("\nChat model set to: " + currentModel)
     printGeneric("")
     return
 
 
-def command_sd_model():
-    global strModelStableDiffusion
-    model = printInput("Select model for Stable Diffusion (leave empty for current '" + strModelStableDiffusion + "'): ")
-    if len(model) == 0:
-        model = strModelStableDiffusion
-    strModelStableDiffusion = model
+def command_image_model():
+    global currentImageModel
+    printGeneric("\nAvailable image models:\n")
+    for model in getModels(False):
+        printGeneric(model)
+    printGeneric("")
     printSeparator()
-    printGreen("\nStable Diffusion model set to: " + model + "\n")
+    nextModel = printInput("Select a model for image generation (leave empty for current '" + currentImageModel + "'): ")
+    printSeparator()
+    nextModelObj = None
+    if len(nextModel) == 0:
+        printRed("\nKeeping current model: " + currentImageModel)
+    else:
+        nextModelObj = getModelByName(nextModel, False)
+        if nextModelObj is None:
+            printRed("\nCan't find a match - keeping current model: " + currentImageModel)
+        else:
+            currentImageModel = nextModelObj
+            printGreen("\Image model set to: " + currentImageModel)
+    printGeneric("")
     return
 
 
@@ -356,7 +374,7 @@ def command_modelscanner():
             if not model["id"] in lstIgnoredModelNames and not model["id"] in fileModelsConfiguration.keys():
                 # add the model
                 printDebug(model["id"] + " is missing from model config")
-                addModels[model["id"]] = {"switchable": False, "description": ""}
+                addModels[model["id"]] = {"text_model": False, "switchable": False, "description": ""}
         
         printDebug("")
 
@@ -489,9 +507,9 @@ def command_selftest():
         printGreen("\nYouTube test passed!\n")
         passes += 1
         
-        printGeneric("\nTesting Stable Diffusion...\n")
+        printGeneric("\nTesting image generation...\n")
         getImageResponse("A red box")
-        printGreen("\nStable Diffusion test passed!\n")
+        printGreen("\nImage generation test passed!\n")
         passed += 1
         
         if passes == target:
@@ -528,7 +546,7 @@ commandMap = {
     command_model:              ["/model"],
     command_modelscanner:       ["/modelscanner"],
     command_online:             ["/online"],
-    command_sd_model:           ["/sdmodel"],
+    command_image_model:           ["/imagemodel"],
     command_selftest:           ["/selftest"],
     command_settings:           ["/settings"],
     command_switcher:           ["/switcher"],
@@ -568,7 +586,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     
     printPromptHistory(promptHistory)
     
-    completion = createOpenAIChatCompletionRequest(getCurrentModelName(), promptHistory, shouldStream = True)
+    completion = createOpenAIChatCompletionRequest(currentModel, promptHistory, shouldStream = True)
     
     printResponse("")
     if completion is not None:
@@ -706,7 +724,7 @@ def getFunctionResponse(promptIn):
     printDebug("\nDetermining function(s) to do for this prompt...")
 
     actionsResponse = createOpenAIChatCompletionRequest(
-        getCurrentModelName(),
+        currentModel,
         fullPrompt,
         functionsIn = function,
         functionCallIn = { "name": "function_action" },
@@ -833,7 +851,7 @@ def getFunctionResponse(promptIn):
 
 def getImageResponse(promptIn):
     printInfo("\nGenerating image with prompt: " + promptIn)
-    theURL = createOpenAIImageRequest(strModelStableDiffusion, promptIn, strImageSize)
+    theURL = createOpenAIImageRequest(currentImageModel, promptIn, strImageSize)
     if theURL is not None:
         split = theURL.split("/")
         filename = split[len(split) - 1]
@@ -862,7 +880,7 @@ def getModelResponse(promptIn):
         printDump("\nCurrent prompt for model response:")
         printPromptHistory(promptMessage)
         printDump("\nChoices: " + grammarString)
-        nextModel = createOpenAIChatCompletionRequest(getCurrentModelName(), promptMessage, grammarIn = grammarString)
+        nextModel = createOpenAIChatCompletionRequest(currentModel, promptMessage, grammarIn = grammarString)
         printDebug("\nNext model: " + nextModel)
         return getModelByName(nextModel)
 

@@ -26,11 +26,11 @@
         "system_prompt_desc": "define the default system prompt. leave blank to disable system prompts.",
         "system_prompt": "You are a helpful ASSISTANT. You will provide a response to USER in the current conversation.",
         
-        "stable_diffusion_model_desc": "set the default stable diffusion model (must be a valid model if you want to use stable diffusion)",
-        "stable_diffusion_model": "stablediffusion",
+        "default_image_model_desc": "set the default image generation model (must be a valid model if you want to use image generation)",
+        "default_image_model": "stablediffusion",
         
-        "stable_diffusion_image_size_desc": "set the resolution for stable diffusion images",
-        "stable_diffusion_image_size": "512x512",
+        "image_size_desc": "set the resolution for images",
+        "image_size": "512x512",
         
         "model_scanner_ignored_filenames_desc": "a list of filenames to ignore when scanning for models",
         "model_scanner_ignored_filenames": [

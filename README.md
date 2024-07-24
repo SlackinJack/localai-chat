@@ -37,12 +37,21 @@ This project was created for specific personal tasks. It will only be adjusted t
 
 
 ## Setup:
-- Use a basic completion template for your models, e.g.:
+- Completion template:
 
 ```
 {{.Input}}
 
 ASSISTANT: 
+```
+
+- Roles configuration:
+
+```
+roles:
+  assistant: 'ASSISTANT'
+  system: 'SYSTEM'
+  user: 'USER'
 ```
 
 
