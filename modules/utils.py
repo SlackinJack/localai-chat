@@ -2,6 +2,7 @@ import json
 import openai
 import os
 import random
+import readline
 import time
 
 

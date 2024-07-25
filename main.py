@@ -22,13 +22,17 @@ from modules.utils_web import *
 # - clean code
 # - fix target links being smashed together
 # - fix location and time in prompts
-# - add more (comprehensive) tests
-# - test file ops
+# - add tests for
+#   - video / speech recognition
+#   - pdf
+#   - pptx
+#   - docx
+# - test write file operation
 # - organize commands
 # - add up-down arrow key support
 # - config reload command
-# - image seeds, retries
 # - support newer localAI and features
+# - /help sections, descriptions
 
 
 #################################################
@@ -373,6 +377,32 @@ def command_image_model():
     return
 
 
+def command_image_size():
+    global strImageSize
+    printGeneric("\nCurrent output image size ([width]x[height]): " + strImageSize + "\n")
+    printSeparator()
+    newImageSize = printInput("Enter the new image size (leave empty for current '" + strImageSize + "'): ")
+    printSeparator()
+    if len(newImageSize) == 0:
+        printRed("\nKeeping current image size: " + strImageSize)
+    else:
+        newRes = newImageSize.split("x")
+        if len(newRes) == 2:
+            newWidth = newRes[0]
+            newHeight = newRes[1]
+            try:
+                int(newWidth)
+                int(newHeight)
+                strImageSize = newImageSize
+                printGreen("\nImage size set to: " + strImageSize)
+            except:
+                printRed("\nResolution entered is not in the format [width]x[height]!\nKeeping current image size: " + strImageSize)
+        else:
+            printRed("\nResolution entered is not in the format [width]x[height]!\nLeeping current image size: " + strImageSize)
+    printGeneric("")
+    return
+
+
 def command_modelscanner():
     modelList = getModelList()
     if modelList is not None:
@@ -449,18 +479,20 @@ def command_switcher():
 
 
 def command_help():
-    printGeneric("\nAvailable commands:\n")
-    for commandName in commandMap.values():
-        if len(commandName) > 0:
-            commandAliasStringBuilder = ""
-            for commandAlias in commandName:
-                if len(commandAliasStringBuilder) > 0:
-                    commandAliasStringBuilder += ", " + commandAlias
-                else:
-                    commandAliasStringBuilder = commandAlias
-            printGeneric(" - " + commandAliasStringBuilder)
+    printGeneric("\nAvailable commands:")
+    currentCategory = ""
+    for commandMetadata in commandMap.values():
+        commandName = commandMetadata[0]
+        commandCategory = commandMetadata[1]
+        commandDescription = commandMetadata[2]
+        if len(currentCategory) == 0:
+            currentCategory = commandCategory
+            printGeneric("\n-------------------- " + currentCategory + " --------------------\n")
         else:
-            printGeneric(" - " + commandName)
+            if not currentCategory == commandCategory:
+                currentCategory = commandCategory
+                printGeneric("\n-------------------- " + currentCategory + " --------------------\n")
+        printGeneric(" - " + commandName + " > " + commandDescription)
     printGeneric("")
     return
 
@@ -545,22 +577,26 @@ def command_exit():
 
 
 commandMap = {
-    command_help:               ["", "/help"],
-    command_clear:              ["/clear"],
-    command_convo:              ["/convo"],
-    command_curl:               ["/curl"],
-    command_functions:          ["/functions"],
-    command_history:            ["/history"],
-    command_image:              ["/image"],
-    command_model:              ["/model"],
-    command_modelscanner:       ["/modelscanner"],
-    command_online:             ["/online"],
-    command_image_model:           ["/imagemodel"],
-    command_selftest:           ["/selftest"],
-    command_settings:           ["/settings"],
-    command_switcher:           ["/switcher"],
-    command_system_prompt:      ["/system", "/systemprompt"],
-    command_exit:               ["/exit"]
+    command_help:               ["/help",           "General",      "Shows all available commands."],
+    command_clear:              ["/clear",          "General",      "Clears the prompt window."],
+    command_settings:           ["/settings",       "General",      "Prints all current settings."],
+    command_exit:               ["/exit",           "General",      "Exits the program."],
+    
+    command_convo:              ["/convo",          "Settings",     "Change the conversation file."],
+    command_image_model:        ["/imagemodel",     "Settings",     "Change the image model."],
+    command_image_size:         ["/imagesize",      "Settings",     "Change output image size."],
+    command_model:              ["/model",          "Settings",     "Change the text model."],
+    command_system_prompt:      ["/system",         "Settings",     "Change the system prompt."],
+    
+    command_functions:          ["/functions",      "Toggles",      "Toggle on/off functions."],
+    command_history:            ["/history",        "Toggles",      "Toggle on/off history consideration."],
+    command_online:             ["/online",         "Toggles",      "Toggle on/off internet for actions."],
+    command_switcher:           ["/switcher",       "Toggles",      "Toggle on/off automatic model switcher."],
+    
+    command_curl:               ["/curl",           "Tools",        "Send cURL commands to the server."],
+    command_image:              ["/image",          "Tools",        "Generate images."],
+    command_modelscanner:       ["/modelscanner",   "Tools",        "Scan for models on the server."],
+    command_selftest:           ["/selftest",       "Tools",        "Test all program functionality."],
 }
 
 
@@ -916,11 +952,10 @@ def handlePrompt(promptIn):
 
 def checkCommands(promptIn):
     if promptIn.startswith("/"):
-        for key, value in commandMap.items():
-            for v in value:
-                if strPrompt == v:
-                    key()
-                    return True
+        for func, value in commandMap.items():
+            if promptIn == value[0]:
+                func()
+                return True
         printError("\nUnknown command.\n")
         return True
     else:
