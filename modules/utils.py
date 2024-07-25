@@ -203,7 +203,7 @@ def formatArrayToString(dataIn, separator):
     stringBuilder = ""
     i = 0
     while i < len(dataIn):
-        stringBuilder += dataIn[i]
+        stringBuilder += str(dataIn[i])
         if i is not len(dataIn) - 1:
             stringBuilder += separator
         i += 1
