@@ -22,21 +22,15 @@ from modules.utils_web import *
 # TODO:
 # - clean code
 # - fix target links being smashed together
-# - fix location and time in prompts
 # - add tests for
 #   - video / speech recognition
 #   - pdf
 #   - pptx
 #   - docx
 # - test write file operation
-# - organize commands
-# - add up-down arrow key support
 # - config reload command
 # - support newer localAI and features
-# - /help sections, descriptions
-# - after each function step, feed the action plan back in as a prompt to let the model revisit the action plan and make changes
 # - [!!!] setting submenus, especially for images
-# - [!!!] set-or-default func and support verifier funcs
 
 
 #################################################
@@ -321,16 +315,36 @@ def command_image():
     return
 
 
+shouldGenerateNextImage = False
+
+
+def exitOnEsc():
+    def callback(event):
+        if event.name == "esc":
+            printRed("\nESC pressed - stopping image generation after next output.\n")
+            shouldGenerateNextImage = False
+    return callback
+
+
 def command_image_endless():
     imageDesc = printInput("Enter image description (continuous mode): ")
     printSeparator()
     if not checkEmptyString(imageDesc):
+        global shouldGenerateNextImage
+        shouldGenerateNextImage = True
+        
+        keyboard.hook(exitOnEsc())
+        
         while True:
-            tic = time.perf_counter()
-            printResponse("\n" + getImageResponse(imageDesc) + "\n")
-            toc = time.perf_counter()
-            printDebug(f"\n\n{toc - tic:0.3f} seconds")
-            printSeparator()
+            if shouldGenerateNextImage:
+                tic = time.perf_counter()
+                printResponse("\n" + getImageResponse(imageDesc) + "\n")
+                toc = time.perf_counter()
+                printDebug(f"\n\n{toc - tic:0.3f} seconds")
+                printSeparator()
+            else:
+                printGeneric("\nExiting continous image generation - returning to menu.\n")
+                break
     else:
         printRed("\nImage prompt was empty - returning to menu.\n")
     return
@@ -364,74 +378,76 @@ def command_convo():
 
 
 def command_model():
+    def model_verifier(nextModelIn):
+        result = getModelByName(nextModelIn, True)
+        return [result, result is not None]
+    
     global currentModel
     printGeneric("\nAvailable models:\n")
     for model in getModels(True):
         printGeneric(model)
     printGeneric("")
     printSeparator()
-    nextModel = printInput("Select a model (leave empty for current '" + currentModel + "'): ")
-    printSeparator()
-    nextModelObj = None
-    if len(nextModel) == 0:
-        printRed("\nKeeping current model: " + currentModel)
-    else:
-        nextModelObj = getModelByName(nextModel, True)
-        if nextModelObj is None:
-            printRed("\nCan't find a match - keeping current model: " + currentModel)
-        else:
-            currentModel = nextModelObj
-            printGreen("\nChat model set to: " + currentModel)
-    printGeneric("")
+    
+    nextModel = setOrDefault(
+        "Select a model",
+        currentModel,
+        model_verifier,
+        "Keeping current model",
+        "Chat model set to",
+        "Cannot find a match - keeping current chat model"
+    )
     return
 
 
 def command_image_model():
+    def image_model_verifier(nextModelIn):
+        result = getModelByName(nextModelIn, False)
+        return [result, result is not None]
+    
     global currentImageModel
     printGeneric("\nAvailable image models:\n")
     for model in getModels(False):
         printGeneric(model)
     printGeneric("")
     printSeparator()
-    nextModel = printInput("Select a model for image generation (leave empty for current '" + currentImageModel + "'): ")
-    printSeparator()
-    nextModelObj = None
-    if len(nextModel) == 0:
-        printRed("\nKeeping current model: " + currentImageModel)
-    else:
-        nextModelObj = getModelByName(nextModel, False)
-        if nextModelObj is None:
-            printRed("\nCan't find a match - keeping current model: " + currentImageModel)
-        else:
-            currentImageModel = nextModelObj
-            printGreen("\nImage model set to: " + currentImageModel)
-    printGeneric("")
+    
+    nextModel = setOrDefault(
+        "Select a model for image generation",
+        currentImageModel,
+        image_model_verifier,
+        "Keeping current image model",
+        "Image model set to",
+        "Cannot find a match - keeping current image model"
+    )
     return
 
 
 def command_image_size():
+    def image_size_verifier(nextSizeIn):
+        newRes = nextSizeIn.split("x")
+        if len(newRes) == 2:
+            try:
+                int(newRes[0])
+                int(newRes[1])
+                return [nextSizeIn, True]
+            except:
+                return [nextSizeIn, False]
+        else:
+            return [nextSizeIn, False]
+    
     global strImageSize
     printGeneric("\nCurrent output image size ([width]x[height]): " + strImageSize + "\n")
     printSeparator()
-    newImageSize = printInput("Enter the new image size (leave empty for current '" + strImageSize + "'): ")
-    printSeparator()
-    if len(newImageSize) == 0:
-        printRed("\nKeeping current image size: " + strImageSize)
-    else:
-        newRes = newImageSize.split("x")
-        if len(newRes) == 2:
-            newWidth = newRes[0]
-            newHeight = newRes[1]
-            try:
-                int(newWidth)
-                int(newHeight)
-                strImageSize = newImageSize
-                printGreen("\nImage size set to: " + strImageSize)
-            except:
-                printRed("\nResolution entered is not in the format [width]x[height]!\nKeeping current image size: " + strImageSize)
-        else:
-            printRed("\nResolution entered is not in the format [width]x[height]!\nLeeping current image size: " + strImageSize)
-    printGeneric("")
+    
+    strImageSize = setOrDefault(
+        "Enter the new image size",
+        strImageSize,
+        image_size_verifier,
+        "Keeping current image size",
+        "Image size set to",
+        "Resolution entered is not in the format [width]x[height]\nKeeping current image size"
+    )
     return
 
 
@@ -627,7 +643,7 @@ commandMap = {
     
     command_curl:               ["/curl",           "Tools",        "Send cURL commands to the server."],
     command_image:              ["/image",          "Tools",        "Generate images."],
-    command_image_endless:      ["/imagespam",      "Tools",        "Generate images endlessly (force-stop to exit)."],
+    command_image_endless:      ["/imagespam",      "Tools",        "Generate images endlessly ('esc' to stop)."],
     command_modelscanner:       ["/modelscanner",   "Tools",        "Scan for models on the server."],
     command_selftest:           ["/selftest",       "Tools",        "Test all program functionality."],
 }

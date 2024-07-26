@@ -36,7 +36,7 @@
         "image_steps": 26,
         
         "image_clip_skips_desc": "set the number of clip skips for images",
-        "image_clip_skips": 15,
+        "image_clip_skips": 5,
         
         "model_scanner_ignored_filenames_desc": "a list of filenames to ignore when scanning for models",
         "model_scanner_ignored_filenames": [

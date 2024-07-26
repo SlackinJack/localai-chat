@@ -237,6 +237,27 @@ def errorBlankEmptyText(sourceIn):
     return "The text received from the " + sourceIn + " is blank and/or empty."
 
 
+##################################################
+################ BEGIN MISC UTILS ################
+##################################################
+
+
+def setOrDefault(promptIn, defaultValueIn, verifierFuncIn, keepDefaultValueStringIn, setValueStringIn, verifierErrorStringIn):
+    result = printInput(promptIn + " (leave empty for current '" + defaultValueIn + "'): ")
+    printSeparator()
+    if len(result) == 0:
+        printRed("\n" + keepDefaultValueStringIn + ": " + defaultValueIn + "\n")
+        return defaultValueIn
+    else:
+        verifiedResult = verifierFuncIn(result)
+        if verifiedResult[1]:
+            printGreen("\n" + setValueStringIn + ": " + verifiedResult[0] + "\n")
+            return result
+        else:
+            printRed("\n" + verifierErrorStringIn + ": " + defaultValueIn + "\n")
+            return defaultValueIn
+
+
 #################################################
 ############# BEGIN OPENAI REQUESTS #############
 #################################################
