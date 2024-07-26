@@ -252,7 +252,7 @@ def setOrDefault(promptIn, defaultValueIn, verifierFuncIn, keepDefaultValueStrin
         verifiedResult = verifierFuncIn(result)
         if verifiedResult[1]:
             printGreen("\n" + setValueStringIn + ": " + verifiedResult[0] + "\n")
-            return result
+            return verifiedResult[0]
         else:
             printRed("\n" + verifierErrorStringIn + ": " + defaultValueIn + "\n")
             return defaultValueIn

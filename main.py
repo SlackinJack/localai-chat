@@ -389,7 +389,7 @@ def command_model():
     printGeneric("")
     printSeparator()
     
-    nextModel = setOrDefault(
+    currentModel = setOrDefault(
         "Select a model",
         currentModel,
         model_verifier,
@@ -412,7 +412,7 @@ def command_image_model():
     printGeneric("")
     printSeparator()
     
-    nextModel = setOrDefault(
+    currentImageModel = setOrDefault(
         "Select a model for image generation",
         currentImageModel,
         image_model_verifier,
