@@ -2,6 +2,7 @@ import datetime
 import json
 import openai
 import os
+import random
 import re
 import requests
 import time
@@ -34,6 +35,8 @@ from modules.utils_web import *
 # - support newer localAI and features
 # - /help sections, descriptions
 # - after each function step, feed the action plan back in as a prompt to let the model revisit the action plan and make changes
+# - [!!!] setting submenus, especially for images
+# - [!!!] set-or-default func and support verifier funcs
 
 
 #################################################
@@ -75,7 +78,7 @@ def getModels(textModels = True):
 
 def getEnabledModelNames():
     out = []
-    for model, modelMetadata in getModels(True):
+    for model, modelMetadata in getModels(True).items():
         if modelMetadata["switchable"]:
             out.append(model)
     return out
@@ -83,7 +86,7 @@ def getEnabledModelNames():
 
 def getEnabledModelDescriptions():
     out = ""
-    for model, modelMetadata in getModels(True):
+    for model, modelMetadata in getModels(True).items():
         if modelMetadata["switchable"]:
             if len(out) > 0:
                 out += " "
@@ -126,6 +129,8 @@ currentModel                    = getModelByName(configModel["default_model"], T
 strSystemPrompt                 = configModel["system_prompt"]
 currentImageModel               = configModel["default_image_model"]
 strImageSize                    = configModel["image_size"]
+intImageSteps                   = configModel["image_steps"]
+intClipSkips                    = configModel["image_clip_skips"]
 lstIgnoredModelNames            = configModel["model_scanner_ignored_filenames"]
 
 
@@ -275,14 +280,12 @@ def command_settings():
     printSetting(shouldAutomaticallySwitchModels, "Automatically Switch Models")
     printSetting(shouldConsiderHistory, "Consider Chat History")
     
-    printGeneric("\nModel:")
-    printGeneric(currentModel)
+    printGeneric("\nModel: " + currentModel)
     
-    printGeneric("\nImage model:")
-    printGeneric(currentImageModel)
+    printGeneric("\nImage model: " + currentImageModel)
+    printGeneric("Image size: " + strImageSize)
     
-    printGeneric("\nConversation file:")
-    printGeneric(strConvoName + ".convo")
+    printGeneric("\nConversation file: " + strConvoName + ".convo")
     
     printGeneric("\nSystem prompt:")
     printCurrentSystemPrompt(printGeneric)
@@ -295,13 +298,41 @@ def command_image():
     imageDesc = printInput("Enter image description: ")
     printSeparator()
     if not checkEmptyString(imageDesc):
+        seed = printInput("Enter an image seed (eg. 1234567890), or leave empty for random: ")
+        if len(seed) == 0:
+            seed = None
+        else:
+            try:
+                int(seed)
+            except:
+                printRed("\nThe seed you entered is invalid - using a random seed!\n")
+                seed = None
+        printSeparator()
+        while True:
+            tic = time.perf_counter()
+            printResponse("\n" + getImageResponse(imageDesc, seed) + "\n")
+            toc = time.perf_counter()
+            printDebug(f"\n\n{toc - tic:0.3f} seconds")
+            if not printYNQuestion("Do you want to regenerate the image with the same prompt and seed?"):
+                printGeneric("\nReturning to menu.\n")
+                break
+    else:
+        printRed("\nImage prompt was empty - returning to menu.\n")
+    return
+
+
+def command_image_endless():
+    imageDesc = printInput("Enter image description (continuous mode): ")
+    printSeparator()
+    if not checkEmptyString(imageDesc):
         while True:
             tic = time.perf_counter()
             printResponse("\n" + getImageResponse(imageDesc) + "\n")
             toc = time.perf_counter()
             printDebug(f"\n\n{toc - tic:0.3f} seconds")
-            if not printYNQuestion("Do you want to regenerate the image with the same prompt?"):
-                break
+            printSeparator()
+    else:
+        printRed("\nImage prompt was empty - returning to menu.\n")
     return
 
 
@@ -596,6 +627,7 @@ commandMap = {
     
     command_curl:               ["/curl",           "Tools",        "Send cURL commands to the server."],
     command_image:              ["/image",          "Tools",        "Generate images."],
+    command_image_endless:      ["/imagespam",      "Tools",        "Generate images endlessly (force-stop to exit)."],
     command_modelscanner:       ["/modelscanner",   "Tools",        "Scan for models on the server."],
     command_selftest:           ["/selftest",       "Tools",        "Test all program functionality."],
 }
@@ -937,17 +969,45 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
     return
 
 
-def getImageResponse(promptIn):
-    printInfo("\nGenerating image with prompt: " + promptIn)
-    theURL = createOpenAIImageRequest(currentImageModel, promptIn, strImageSize)
+def getImageResponse(promptIn, seedIn=None):
+    if seedIn is None:
+        seedIn = random.randrange(-9999999999, 9999999999)
+    else:
+        seedIn = int(seedIn)
+    
+    positivePrompt = ""
+    negativePrompt = ""
+    prompts = promptIn.split(" | ")
+    if len(prompts) == 2:
+        positivePrompt = prompts[0]
+        negativePrompt = prompts[1]
+    elif len(prompts) == 1:
+        positivePrompt = promptIn
+    else:
+        printError("\nThe prompt is malformed.")
+        printError("You must enter a prompt in the form of:")
+        printError("'positive prompt | negative prompt'")
+        return ""
+    
+    printInfo("\nGenerating image...\n")
+    printDebug("Positive prompt:\n" + positivePrompt + "\n")
+    if len(negativePrompt) > 0:
+        printDebug("Negative prompt:\n" + negativePrompt + "\n")
+    printDebug("Dimensions: " + strImageSize)
+    printDebug("Seed: " + str(seedIn))
+    printDebug("Steps : " + str(intImageSteps))
+    printDebug("Clip Skips: " + str(intClipSkips))
+    
+    theURL = createOpenAIImageRequest(currentImageModel, positivePrompt, negativePrompt, strImageSize, seedIn, intImageSteps, intClipSkips)
     if theURL is not None:
         split = theURL.split("/")
         filename = split[len(split) - 1]
         filename = "output/" + filename
         urllib.request.urlretrieve(theURL, filename)
+        
         if shouldAutomaticallyOpenFiles:
             openLocalFile(filename)
-        # TODO: file management
+        
         return "Your image is available at: " + filename
     else:
         printError("\nImage creation failed!\n")

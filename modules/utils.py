@@ -276,14 +276,18 @@ def createOpenAIChatCompletionRequest(modelIn, messagesIn, shouldStream = False,
                 return None
 
 
-def createOpenAIImageRequest(modelIn, promptIn, sizeIn):
+def createOpenAIImageRequest(modelIn, positivePromptIn, negativePromptIn, sizeIn, seedIn, stepIn, clipSkipIn):
     failedCompletions = 0
     while True:
         try:
             completion = openai.Image.create(
                 model = modelIn,
-                prompt = promptIn,
+                prompt = positivePromptIn,
+                negative_prompt = negativePromptIn,
                 size = sizeIn,
+                seed = seedIn,
+                step = stepIn,
+                clip_skip = clipSkipIn,
             )
             return completion.data[0].url
         except Exception as e:

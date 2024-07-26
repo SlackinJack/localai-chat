@@ -30,7 +30,13 @@
         "default_image_model": "stablediffusion",
         
         "image_size_desc": "set the resolution for images (WxH)",
-        "image_size": "320x512",
+        "image_size": "480x768",
+        
+        "image_steps_desc": "set the amount of steps for images",
+        "image_steps": 26,
+        
+        "image_clip_skips_desc": "set the number of clip skips for images",
+        "image_clip_skips": 15,
         
         "model_scanner_ignored_filenames_desc": "a list of filenames to ignore when scanning for models",
         "model_scanner_ignored_filenames": [
@@ -49,16 +55,16 @@
         "enable_internet": true,
         
         "enable_automatic_model_switching_desc": "toggle automatic model switching",
-        "enable_automatic_model_switching": false,
+        "enable_automatic_model_switching": true,
         
         "enable_chat_history_consideration_desc": "toggle using chat history as part of the prompt",
-        "enable_chat_history_consideration": false,
+        "enable_chat_history_consideration": true,
         
         "max_sources_per_search_desc": "max number of sources to use, when using online sources",
-        "max_sources_per_search": 2,
+        "max_sources_per_search": 3,
         
         "max_sentences_per_source_desc": "max number of sentences to use from each unique source",
-        "max_sentences_per_source": 12
+        "max_sentences_per_source": 10
     }
 }
 

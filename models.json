@@ -18,5 +18,15 @@
         "text_model": false,
         "switchable": false,
         "description": ""
+    },
+    "test1": {
+        "text_model": false,
+        "switchable": false,
+        "description": ""
+    },
+    "test2": {
+        "text_model": false,
+        "switchable": false,
+        "description": ""
     }
 }
