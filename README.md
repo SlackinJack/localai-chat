@@ -12,24 +12,28 @@ This project was created for specific personal tasks. It will only be adjusted t
 
 
 ## Current features:
-- Paste weblinks into the prompt and interact with just about any website that has text.
-- Get transcripts from YouTube videos, and prompt on the content.
-- Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content.
-- Basic support for prompting on audio/video files.
-- Search duckduckgo based on generated search terms from your prompt, then answer your prompt based on what it found. (With sources!)
+- Paste weblinks into the prompt and interact with just about any website that has text
+- Get transcripts from YouTube videos, and prompt on the content
+- Read PDFs, DOCX, PPTX, or other files (as raw text), and prompt on the content
+- Basic support for prompting on audio/video files
+- Search duckduckgo based on generated search terms from your prompt, then answer your prompt based on what it found (with sources)
 - Automatically switch models (using your description of each model)
 
 
 ## Other features:
 - Text-streaming for outputs
 - Reply to conversations, load previous conversations and continue them
-- Send preconfigured/custom cURL commands
-- Stable Diffusion outputs
+- Send cURL commands
+- Image outputs (single or infinite)
 - Adjustable system prompt
+- Use time, location data (IP-based) to get updated and localized information
 
 
 ## Planned features:
-- File outputs
+- Image-to-Image
+- Image-to-Text (vision, scan for text)
+- STT/TTS
+- Function-generated file outputs
 
 
 ## Current dependencies:
