@@ -3,6 +3,12 @@
         "address_desc": "address of the server",
         "address": "http://localhost:8080",
         
+        "parallel_requests_gpu_max_desc": "set max number of parallel requests on gpu, or 0 to disable",
+        "parallel_requests_gpu_max": 2,
+        
+        "parallel_requests_cpu_max_desc": "set max number of parallel requests on cpu, or 0 to disable",
+        "parallel_requests_cpu_max": 1,
+        
         "debug_level_desc": "set output debug level: 4-all, 3-debug, 2-info, 1-error, 0-disabled",
         "debug_level": 4,
         
@@ -27,16 +33,13 @@
         "system_prompt": "You are a helpful ASSISTANT. You will provide a response to USER in the current conversation.",
         
         "default_image_model_desc": "set the default image generation model (must be a valid model if you want to use image generation)",
-        "default_image_model": "stablediffusion",
+        "default_image_model": "test1",
         
         "image_size_desc": "set the resolution for images (WxH)",
-        "image_size": "768x1024",
+        "image_size": "512x1344",
         
-        "image_steps_desc": "set the amount of steps for images",
-        "image_steps": 24,
-        
-        "image_clip_skips_desc": "set the number of clip skips for images",
-        "image_clip_skips": 11,
+        "image_step_desc": "set the amount of step for images",
+        "image_step": 14,
         
         "model_scanner_ignored_filenames_desc": "a list of filenames to ignore when scanning for models",
         "model_scanner_ignored_filenames": [

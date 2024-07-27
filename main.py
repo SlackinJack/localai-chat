@@ -10,6 +10,7 @@ import urllib
 
 
 from difflib import SequenceMatcher
+from threading import Thread
 from pynput import keyboard
 
 
@@ -31,7 +32,6 @@ from modules.utils_web import *
 # - test write file operation in functions
 # - save config
 # - support newer localAI and features
-# - [!!!] setting submenus, especially for images
 
 
 #################################################
@@ -54,6 +54,8 @@ defaultModelName = ""
 strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 strConvoName = strConvoTimestamp
 shouldGenerateNextImage = False
+runningImageThreadsGPU = 0
+runningImageThreadsCPU = 0
 
 
 ####### MODELS CONFIG #######
@@ -130,6 +132,8 @@ def loadConfiguration():
             newAddress += "/"
         openai.api_base = newAddress + "v1"
     
+    configs["parallel_requests_gpu_max"]        = configMain["parallel_requests_gpu_max"]
+    configs["parallel_requests_cpu_max"]        = configMain["parallel_requests_cpu_max"]
     configs["response_timeout_seconds"]         = configMain["response_timeout_seconds"]
     configs["delete_output_files_on_exit"]      = configMain["delete_output_files_on_exit"]
     configs["automatically_open_files"]         = configMain["automatically_open_files"]
@@ -142,8 +146,7 @@ def loadConfiguration():
     configs["system_prompt"]                    = configModel["system_prompt"]
     configs["default_image_model"]              = configModel["default_image_model"]
     configs["image_size"]                       = configModel["image_size"]
-    configs["image_steps"]                      = configModel["image_steps"]
-    configs["image_clip_skips"]                 = configModel["image_clip_skips"]
+    configs["image_step"]                       = configModel["image_step"]
     configs["model_scanner_ignored_filenames"]  = configModel["model_scanner_ignored_filenames"]
     
     
@@ -332,9 +335,7 @@ def command_settings():
     printSetting(configs["enable_chat_history_consideration"], "Consider Chat History")
     
     printGeneric("\nModel: " + configs["default_model"])
-    
-    printGeneric("\nImage model: " + configs["default_image_model"])
-    printGeneric("Image size: " + configs["image_size"])
+    printGeneric("Image model: " + configs["default_image_model"])
     
     printGeneric("\nConversation file: " + strConvoName + ".convo")
     
@@ -469,7 +470,10 @@ def submenu_model_image():
     printGeneric("\nAvailable image models:\n")
     for model in getModels(False):
         printGeneric(model)
-    printGeneric("")
+
+    printGeneric("\n(Note: If you are using parallel requests with the CPU,")
+    printGeneric("the CPU model should be named '[modelname]-cpu' on the server,")
+    printGeneric("with your CPU-specific tuning and configuration settings.)")
     
     configs["default_image_model"] = setOrDefault(
         "Select a model for image generation",
@@ -551,7 +555,10 @@ def command_image():
                 submenu_image_endless()
             case "settings":
                 while True:
-                    settings_submenus = ["clip_skip", "size", "step", "exit"]
+                    settings_submenus = ["size", "step", "exit"]
+                    printGeneric("\nImage Settings:")
+                    printGeneric("Dimensions: " + configs["image_size"])
+                    printGeneric("Step: " + str(configs["image_step"]))
                     printGeneric("\nImage settings menu:\n")
                     for setting_submenu in settings_submenus:
                         printGeneric(" - " + setting_submenu)
@@ -561,8 +568,6 @@ def command_image():
                     printSeparator()
                     
                     match settings_selection:
-                        case "clip_skip":
-                            submenu_image_settings_clipskip()
                         case "size":
                             submenu_image_settings_size()
                         case "step":
@@ -585,20 +590,13 @@ def command_image():
 ### Begin image submenus ###
 
 def submenu_image_single():
-    def seed_verifier(seedIn):
-        try:
-            int(seed)
-            return [seedIn, True]
-        except:
-            return [seedIn, False]
-
     imageDesc = printInput("Enter image description: ")
     if not checkEmptyString(imageDesc):
         
         seed = setOrPresetValue(
             "Enter an image seed (eg. 1234567890)",
             None,
-            seed_verifier,
+            intVerifier,
             "random",
             "Using a random seed.",
             "The seed you entered is invalid - using a random seed!"
@@ -622,44 +620,71 @@ def submenu_image_endless():
     imageDesc = printInput("Enter image description (continuous mode): ")
     printSeparator()
     if not checkEmptyString(imageDesc):
+        positivePrompt = ""
+        negativePrompt = ""
+        prompts = imageDesc.split(" | ")
+        if len(prompts) == 2:
+            positivePrompt = prompts[0]
+            negativePrompt = prompts[1]
+        elif len(prompts) == 1:
+            positivePrompt = imageDesc
+        else:
+            printError("\nThe prompt is malformed.")
+            printError("You must enter a prompt in the form of:")
+            printError("'positive prompt | negative prompt'")
+            return
+        
+        def imageWorkerGPU():
+            global runningImageThreadsGPU
+            runningImageThreadsGPU += 1
+            tic = time.perf_counter()
+            printResponse("\n[GPU] Image created: " + getImageResponse(imageDesc, silent=True) + "\n")
+            toc = time.perf_counter()
+            printDebug(f"{toc - tic:0.3f} seconds\n")
+            printSeparator()
+            runningImageThreadsGPU -= 1
+        
+        def imageWorkerCPU():
+            global runningImageThreadsCPU
+            runningImageThreadsCPU += 1
+            tic = time.perf_counter()
+            printResponse("\n[CPU] Image created: " + getImageResponse(imageDesc, silent=True, isCPU=True) + "\n")
+            toc = time.perf_counter()
+            printDebug(f"{toc - tic:0.3f} seconds\n")
+            printSeparator()
+            runningImageThreadsCPU -= 1
+        
+        global runningImageThreadsGPU
+        global runningImageThreadsCPU
+        
+        printGeneric("\n(Press [F12] to stop image generation.)\n")
+        printGeneric("\nGenerating images...\n")
+        printGeneric("Positive prompt:\n" + positivePrompt + "\n")
+        if len(negativePrompt) > 0:
+            printGeneric("Negative prompt:\n" + negativePrompt + "\n")
+        printGeneric("Image Settings:")
+        printGeneric("Dimensions: " + configs["image_size"])
+        printGeneric("Step: " + str(configs["image_step"]))
+        printGeneric("\nWorkers: " +
+            str(configs["parallel_requests_gpu_max"]) + " GPU + " +
+            str(configs["parallel_requests_cpu_max"]) + " CPU\n")
+        printSeparator()
+        
         global shouldGenerateNextImage
         shouldGenerateNextImage = True
         
         while True:
             if shouldGenerateNextImage:
-                printGeneric("\n(Press [F12] to stop image generation after this output.)\n")
-                tic = time.perf_counter()
-                printResponse("\n" + getImageResponse(imageDesc) + "\n")
-                toc = time.perf_counter()
-                printDebug(f"\n\n{toc - tic:0.3f} seconds")
-                printSeparator()
+                if runningImageThreadsGPU < configs["parallel_requests_gpu_max"]:
+                    Thread(target = imageWorkerGPU).start()
+                if runningImageThreadsCPU < configs["parallel_requests_cpu_max"]:
+                    Thread(target = imageWorkerCPU).start()
             else:
-                printGeneric("\nExiting continous image generation - returning to image menu.\n")
-                break
+                if runningImageThreadsGPU == 0 and runningImageThreadsCPU == 0:
+                    printGeneric("\nExiting continous image generation - returning to image menu.\n")
+                    break
     else:
         printRed("\nImage prompt was empty - returning to image menu.\n")
-    return
-
-
-def submenu_image_settings_clipskip():
-    def clipskip_verifier(clipskipIn):
-        try:
-            int(clipskipIn)
-            return [clipskipIn, True]
-        except:
-            return [clipskipIn, False]
-    
-    printGeneric("\nClip skip is how much an image should diverge from a given prompt.")
-    printGeneric("Higher values are more 'creative'. Lower values are more restricted to the prompt.\n")
-    
-    configs["image_clip_skips"] = setOrDefault(
-        "Enter image clip skip value",
-        configs["image_clip_skips"],
-        clipskip_verifier,
-        "Keeping current image clip skip value",
-        "Image clip skip value set to",
-        "Invalid integer value - keeping current image clip skip value"
-    )
     return
 
 
@@ -692,21 +717,14 @@ def submenu_image_settings_size():
 
 
 def submenu_image_settings_step():
-    def step_verifier(stepIn):
-        try:
-            int(stepIn)
-            return [stepIn, True]
-        except:
-            return [stepIn, False]
-    
     printGeneric("\nSteps is the number of refinement iterations to do on a given image.")
     printGeneric("More steps usually result in better images, but with gradual diminishing returns.")
     printGeneric("Higher values will negatively affect processing time with large images.\n")
     
-    configs["image_steps"] = setOrDefault(
+    configs["image_step"] = setOrDefault(
         "Enter image step value",
-        configs["image_steps"],
-        step_verifier,
+        configs["image_step"],
+        intVerifier,
         "Keeping current image step value",
         "Image step value set to",
         "Invalid integer value - keeping current image step value"
@@ -1154,7 +1172,7 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
     return
 
 
-def getImageResponse(promptIn, seedIn=None):
+def getImageResponse(promptIn, seedIn=None, silent=False, isCPU=False):
     if seedIn is None:
         seedIn = random.randrange(-9999999999, 9999999999)
     else:
@@ -1174,23 +1192,29 @@ def getImageResponse(promptIn, seedIn=None):
         printError("'positive prompt | negative prompt'")
         return ""
     
-    printInfo("\nGenerating image...\n")
-    printDebug("Positive prompt:\n" + positivePrompt + "\n")
-    if len(negativePrompt) > 0:
-        printDebug("Negative prompt:\n" + negativePrompt + "\n")
-    printDebug("Dimensions: " + configs["image_size"])
-    printDebug("Seed: " + str(seedIn))
-    printDebug("Step : " + str(configs["image_steps"]))
-    printDebug("Clip Skip: " + str(configs["image_clip_skips"]))
+    if not silent:
+        printInfo("\nGenerating image...\n")
+        printDebug("Positive prompt:\n" + positivePrompt + "\n")
+        if len(negativePrompt) > 0:
+            printDebug("Negative prompt:\n" + negativePrompt + "\n")
+        printDebug("Image Settings:")
+        printDebug("Dimensions: " + configs["image_size"])
+        printDebug("Seed: " + str(seedIn))
+        printDebug("Step: " + str(configs["image_step"]))
+    
+    
+    imageModel = configs["default_image_model"]
+    
+    if isCPU:
+        imageModel += "-cpu"
     
     theURL = createOpenAIImageRequest(
-        configs["default_image_model"],
+        imageModel,
         positivePrompt,
         negativePrompt,
         configs["image_size"],
         seedIn,
-        configs["image_steps"],
-        configs["image_clip_skips"]
+        configs["image_step"]
     )
     
     if theURL is not None:
@@ -1202,7 +1226,10 @@ def getImageResponse(promptIn, seedIn=None):
         if configs["automatically_open_files"]:
             openLocalFile(filename)
         
-        return "Your image is available at: " + filename
+        if silent:
+            return filename
+        else:
+            return "Your image is available at: " + filename
     else:
         printError("\nImage creation failed!\n")
         return ""
@@ -1325,21 +1352,20 @@ def key_Listener(key):
     global shouldGenerateNextImage
     if key == keyboard.Key.f12 and shouldGenerateNextImage:
         shouldGenerateNextImage = False
-        printRed("\n[F12] pressed - stopping image generation after this output.\n")
+        printRed("\n[F12] pressed - waiting for image generators to complete then exiting...\n")
+        printSeparator()
     return
 
 
 keyboardListener = keyboard.Listener(on_press=key_Listener)
 keyboardListener.start()
 
-
 setConversation(strConvoTimestamp)
-
 
 command_clear()
 
 printSeparator()
-printGeneric("Note: This script blocks the use of the [F12] key - remap this in code if needed.")
+printGeneric("Note: This script can sometimes block the use of the [F12] key - remap this in code if needed.")
 printSeparator()
 
 command_settings()

@@ -304,6 +304,20 @@ def toggleSetting(settingIn, disableStringIn, enableStringIn):
     return not settingIn
 
 
+def intVerifier(stringIn):
+    try:
+        return [int(stringIn), True]
+    except:
+        return [stringIn, False]
+
+
+def floatVerifier(stringIn):
+    try:
+        return [float(stringIn), True]
+    except:
+        return [stringIn, False]
+
+
 #################################################
 ############# BEGIN OPENAI REQUESTS #############
 #################################################
@@ -343,7 +357,7 @@ def createOpenAIChatCompletionRequest(modelIn, messagesIn, shouldStream = False,
                 return None
 
 
-def createOpenAIImageRequest(modelIn, positivePromptIn, negativePromptIn, sizeIn, seedIn, stepIn, clipSkipIn):
+def createOpenAIImageRequest(modelIn, positivePromptIn, negativePromptIn, sizeIn, seedIn, stepIn):
     failedCompletions = 0
     while True:
         try:
@@ -354,7 +368,6 @@ def createOpenAIImageRequest(modelIn, positivePromptIn, negativePromptIn, sizeIn
                 size = sizeIn,
                 seed = seedIn,
                 step = stepIn,
-                clip_skip = clipSkipIn,
             )
             return completion.data[0].url
         except Exception as e:
