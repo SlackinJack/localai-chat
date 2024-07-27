@@ -60,7 +60,8 @@ roles:
 ```
 
 - If you want to use both CPU and GPU for endless image generation mode:
-  - Make a copy your GPU model.yaml, paste as model-cpu.yaml, eg.:
+
+Make a copy your GPU model.yaml, paste as model-cpu.yaml, eg.:
 
 ```
 name: stablediffusion
@@ -71,7 +72,7 @@ f16: true
 cuda: true
 ```
 
-  - Then make CPU-specific changes to it, eg.:
+Then make CPU-specific changes to it, eg.:
 
 ```
 name: stablediffusion-cpu
@@ -82,11 +83,12 @@ f16: false
 cuda: false
 ```
 
-  - Make sure to have the following in your LocalAI launcher,  and make changes as necessary to adapt this to your system/configuration:
+Make sure to have the following in your LocalAI launcher,  and make changes as necessary to adapt this to your system/configuration:
 
 ```
-"--parallel-requests=true --threads=4 --single-active-backend=false"
+--parallel-requests=true --threads=4 --single-active-backend=false
 ```
+
 
 ## Test environment:
 - Ubuntu Server 22.04
