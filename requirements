@@ -1,5 +1,6 @@
 docx2txt
 duckduckgo_search
+pynput
 openai==0.28.0
 pydub
 PyPDF2

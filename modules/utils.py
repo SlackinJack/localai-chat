@@ -243,19 +243,65 @@ def errorBlankEmptyText(sourceIn):
 
 
 def setOrDefault(promptIn, defaultValueIn, verifierFuncIn, keepDefaultValueStringIn, setValueStringIn, verifierErrorStringIn):
-    result = printInput(promptIn + " (leave empty for current '" + defaultValueIn + "'): ")
+    return setOr(
+        promptIn,
+        "leave empty for current",
+        defaultValueIn,
+        verifierFuncIn,
+        keepDefaultValueStringIn,
+        setValueStringIn,
+        verifierErrorStringIn
+    )
+
+
+def setOrPresetValue(promptIn, presetValueIn, verifierFuncIn, presetTypeStringIn, presetValueStringIn, verifierErrorStringIn):
+    return setOrPresetValue(
+        promptIn,
+        "leave empty for " + presetTypeStringIn,
+        presetValueIn,
+        verifierFuncIn,
+        presetValueStringIn,
+        "",
+        verifierErrorStringIn
+    )
+
+
+def setOrPresetValue(promptIn, presetValueIn, verifierFuncIn, presetTypeStringIn, presetValueStringIn, verifiedResultStringIn, verifierErrorStringIn):
+    return setOr(
+        promptIn,
+        "leave empty for " + presetTypeStringIn,
+        presetValueIn,
+        verifierFuncIn,
+        presetValueStringIn,
+        verifiedResultStringIn,
+        verifierErrorStringIn
+    )
+
+
+def setOr(messageIn, leaveEmptyMessageIn, valueIn, verifierFuncIn, noResultMessageIn, verifiedResultMessageIn, verifierErrorMessageIn):
+    printSeparator()
+    result = printInput(messageIn + "(" + leaveEmptyMessageIn + " '" + str(valueIn) + "'): ")
     printSeparator()
     if len(result) == 0:
-        printRed("\n" + keepDefaultValueStringIn + ": " + defaultValueIn + "\n")
-        return defaultValueIn
+        printRed("\n" + noResultMessageIn + ": " + str(valueIn) + "\n")
+        return valueIn
     else:
         verifiedResult = verifierFuncIn(result)
         if verifiedResult[1]:
-            printGreen("\n" + setValueStringIn + ": " + verifiedResult[0] + "\n")
+            if len(verifiedResultMessageIn) > 0:
+                printGreen("\n" + verifiedResultMessageIn + ": " + str(verifiedResult[0]) + "\n")
             return verifiedResult[0]
         else:
-            printRed("\n" + verifierErrorStringIn + ": " + defaultValueIn + "\n")
-            return defaultValueIn
+            printRed("\n" + verifierErrorMessageIn + ": " + str(valueIn) + "\n")
+            return valueIn
+
+
+def toggleSetting(settingIn, disableStringIn, enableStringIn):
+    if settingIn:
+        printRed("\n" + disableStringIn + "\n")
+    else:
+        printGreen("\n" + enableStringIn + "\n")
+    return not settingIn
 
 
 #################################################

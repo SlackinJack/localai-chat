@@ -30,13 +30,13 @@
         "default_image_model": "stablediffusion",
         
         "image_size_desc": "set the resolution for images (WxH)",
-        "image_size": "480x768",
+        "image_size": "768x1536",
         
         "image_steps_desc": "set the amount of steps for images",
-        "image_steps": 26,
+        "image_steps": 16,
         
         "image_clip_skips_desc": "set the number of clip skips for images",
-        "image_clip_skips": 5,
+        "image_clip_skips": 11,
         
         "model_scanner_ignored_filenames_desc": "a list of filenames to ignore when scanning for models",
         "model_scanner_ignored_filenames": [

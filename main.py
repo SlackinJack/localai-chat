@@ -10,6 +10,7 @@ import urllib
 
 
 from difflib import SequenceMatcher
+from pynput import keyboard
 
 
 from modules.file_operations import *
@@ -27,7 +28,7 @@ from modules.utils_web import *
 #   - pdf
 #   - pptx
 #   - docx
-# - test write file operation
+# - test write file operation in functions
 # - config reload command
 # - support newer localAI and features
 # - [!!!] setting submenus, especially for images
@@ -289,19 +290,25 @@ def command_settings():
 
 
 def command_image():
+    def seed_verifier(seedIn):
+        try:
+            int(seed)
+            return [seedIn, True]
+        except:
+            return [seedIn, False]
+    
     imageDesc = printInput("Enter image description: ")
-    printSeparator()
     if not checkEmptyString(imageDesc):
-        seed = printInput("Enter an image seed (eg. 1234567890), or leave empty for random: ")
-        if len(seed) == 0:
-            seed = None
-        else:
-            try:
-                int(seed)
-            except:
-                printRed("\nThe seed you entered is invalid - using a random seed!\n")
-                seed = None
-        printSeparator()
+        
+        seed = setOrPresetValue(
+            "Enter an image seed (eg. 1234567890)",
+            None,
+            seed_verifier,
+            "random",
+            "Using a random seed.",
+            "The seed you entered is invalid - using a random seed!"
+        )
+        
         while True:
             tic = time.perf_counter()
             printResponse("\n" + getImageResponse(imageDesc, seed) + "\n")
@@ -311,6 +318,7 @@ def command_image():
                 printGeneric("\nReturning to menu.\n")
                 break
     else:
+        printSeparator()
         printRed("\nImage prompt was empty - returning to menu.\n")
     return
 
@@ -318,12 +326,15 @@ def command_image():
 shouldGenerateNextImage = False
 
 
-def exitOnEsc():
-    def callback(event):
-        if event.name == "esc":
-            printRed("\nESC pressed - stopping image generation after next output.\n")
-            shouldGenerateNextImage = False
-    return callback
+def key_Listener(key):
+    global shouldGenerateNextImage
+    if key == keyboard.Key.f12 and shouldGenerateNextImage:
+        shouldGenerateNextImage = False
+        printRed("\n[F12] pressed - stopping image generation after this output.\n")
+    return
+
+
+keyListener = keyboard.Listener(on_press=key_Listener)
 
 
 def command_image_endless():
@@ -333,10 +344,10 @@ def command_image_endless():
         global shouldGenerateNextImage
         shouldGenerateNextImage = True
         
-        keyboard.hook(exitOnEsc())
-        
+        keyListener.start()
         while True:
             if shouldGenerateNextImage:
+                printGeneric("\n(Press [F12] to stop image generation after this output.)\n")
                 tic = time.perf_counter()
                 printResponse("\n" + getImageResponse(imageDesc) + "\n")
                 toc = time.perf_counter()
@@ -345,12 +356,14 @@ def command_image_endless():
             else:
                 printGeneric("\nExiting continous image generation - returning to menu.\n")
                 break
+        keyListener.stop()
     else:
         printRed("\nImage prompt was empty - returning to menu.\n")
     return
 
 
 def command_convo():
+    presetName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     printGeneric("\nConversations available:\n")
     convoList = []
     
@@ -361,19 +374,25 @@ def command_convo():
             printGeneric(convoName)
     
     printGeneric("")
-    printSeparator()
-    convoName = printInput("Select a conversation to use, create a new one by using an unique name, or leave blank for auto-generated: ")
-    printSeparator()
     
-    if len(convoName) == 0:
-        convoName = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    else:
-        for conversation in convoList:
-            if convoName in conversation:
-                convoName = conversation
+    def convo_verifier(convoNameIn):
+        if len(convoNameIn) > 0:
+            for conversation in convoList:
+                if convoNameIn in conversation:
+                    return[conversation, True]
+        return [presetName, True]
     
-    setConversation(convoName)
-    printGreen("\nConversation set to: " + convoName + "\n")
+    setConversation(
+        setOrPresetValue(
+            "Select a conversation to use or create a new one by using an unique name",
+            presetName,
+            convo_verifier,
+            "auto-generated",
+            "Using generated name.",
+            "Conversation set to",
+            ""
+        )
+    )
     return
 
 
@@ -387,7 +406,6 @@ def command_model():
     for model in getModels(True):
         printGeneric(model)
     printGeneric("")
-    printSeparator()
     
     currentModel = setOrDefault(
         "Select a model",
@@ -410,7 +428,6 @@ def command_image_model():
     for model in getModels(False):
         printGeneric(model)
     printGeneric("")
-    printSeparator()
     
     currentImageModel = setOrDefault(
         "Select a model for image generation",
@@ -438,7 +455,6 @@ def command_image_size():
     
     global strImageSize
     printGeneric("\nCurrent output image size ([width]x[height]): " + strImageSize + "\n")
-    printSeparator()
     
     strImageSize = setOrDefault(
         "Enter the new image size",
@@ -483,21 +499,21 @@ def command_modelscanner():
 
 def command_functions():
     global shouldUseFunctions
-    shouldUseFunctions = not shouldUseFunctions
-    if shouldUseFunctions:
-        printGreen("\nNow using functions for prompts!\n")
-    else:
-        printRed("\nNot using functions for prompts!\n")
+    shouldUseFunctions = toggleSetting(
+        shouldUseFunctions,
+        "Functions is disabled for prompts.",
+        "Functions is enabled for prompts."
+    )
     return
 
 
 def command_online():
     global shouldUseInternet
-    shouldUseInternet = not shouldUseInternet
-    if shouldUseInternet:
-        printGreen("\nSet to online mode!\n")
-    else:
-        printRed("\nSet to offline mode!\n")
+    shouldUseInternet = toggleSetting(
+        shouldUseInternet,
+        "Internet is disabled for functions.",
+        "Internet is enabled for functions."
+    )
     return
 
 
@@ -508,21 +524,21 @@ def command_curl():
 
 def command_history():
     global shouldConsiderHistory
-    shouldConsiderHistory = not shouldConsiderHistory
-    if shouldConsiderHistory:
-        printGreen("\nNow using chat history in prompts!\n")
-    else:
-        printRed("\nNot using chat history in prompts!\n")
+    shouldConsiderHistory = toggleSetting(
+        shouldConsiderHistory,
+        "Chat history will not be used in prompts.",
+        "Chat history will be used in prompts."
+    )
     return
 
 
 def command_switcher():
     global shouldAutomaticallySwitchModels
-    shouldAutomaticallySwitchModels = not shouldAutomaticallySwitchModels
-    if shouldAutomaticallySwitchModels:
-        printGreen("\nNow automatically switching models!\n")
-    else:
-        printRed("\nNot automatically switching models!\n")
+    shouldAutomaticallySwitchModels = toggleSetting(
+        shouldAutomaticallySwitchModels,
+        "Response model will be not be switched.",
+        "Response model will be automatically chosen."
+    )
     return
 
 
@@ -1011,8 +1027,8 @@ def getImageResponse(promptIn, seedIn=None):
         printDebug("Negative prompt:\n" + negativePrompt + "\n")
     printDebug("Dimensions: " + strImageSize)
     printDebug("Seed: " + str(seedIn))
-    printDebug("Steps : " + str(intImageSteps))
-    printDebug("Clip Skips: " + str(intClipSkips))
+    printDebug("Step : " + str(intImageSteps))
+    printDebug("Clip Skip: " + str(intClipSkips))
     
     theURL = createOpenAIImageRequest(currentImageModel, positivePrompt, negativePrompt, strImageSize, seedIn, intImageSteps, intClipSkips)
     if theURL is not None:
