@@ -24,9 +24,10 @@ This project was created for specific personal tasks. It will only be adjusted t
 - Text-streaming for outputs
 - Reply to conversations, load previous conversations and continue them
 - Send cURL commands
-- Image outputs (single or infinite)
+- Image outputs (single or endless)
 - Adjustable system prompt
 - Use time, location data (IP-based) to get updated and localized information
+- Utilize both CPU and GPU for image outputs (endless-mode)
 
 
 ## Planned features:
@@ -58,6 +59,34 @@ roles:
   user: 'USER'
 ```
 
+- If you want to use both CPU and GPU for endless image generation mode:
+  - Make a copy your GPU model.yaml, paste as model-cpu.yaml, eg.:
+
+```
+name: stablediffusion
+parameters:
+  model: /path/to/stablediffusion/folder/
+backend: diffusers
+f16: true
+cuda: true
+```
+
+  - Then make CPU-specific changes to it, eg.:
+
+```
+name: stablediffusion-cpu
+parameters:
+  model: /path/to/stablediffusion/folder/
+backend: diffusers
+f16: false
+cuda: false
+```
+
+  - Make sure to have the following in your LocalAI launcher,  and make changes as necessary to adapt this to your system/configuration:
+
+```
+"--parallel-requests=true --threads=4 --single-active-backend=false"
+```
 
 ## Test environment:
 - Ubuntu Server 22.04

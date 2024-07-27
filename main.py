@@ -617,7 +617,7 @@ def submenu_image_single():
 
 
 def submenu_image_endless():
-    imageDesc = printInput("Enter image description (continuous mode): ")
+    imageDesc = printInput("Enter image description (endless mode): ")
     printSeparator()
     if not checkEmptyString(imageDesc):
         positivePrompt = ""
