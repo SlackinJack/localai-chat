@@ -50,6 +50,7 @@ strDetermineBestAssistant = "Use the following descriptions of each assistant to
 
 configs = {}
 modelConfigs = {}
+defaultModelName = ""
 strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 strConvoName = strConvoTimestamp
 shouldGenerateNextImage = False
@@ -72,7 +73,7 @@ def getModelByName(modelNameIn, textModel = True):
 
 
 def resetCurrentModel():
-    configs["default_model"] = getModelByName(configModel["default_model"], True)
+    configs["default_model"] = getModelByName(defaultModelName, True)
     return
 
 
@@ -149,6 +150,10 @@ def loadConfiguration():
     if configs["default_model"] is None:
         printRed("\nYour default model is missing from models.json! Please fix your configuration.")
         command_exit()
+    
+    
+    global defaultModelName
+    defaultModelName = configModel["default_model"]
     
     
     ############ behavioural configs ###########
@@ -574,7 +579,9 @@ def command_system_prompt():
 
 
 def command_selftest():
-    if printYNQuestion("The program will self-test. Do you want to continue?"):
+    printGeneric("\nWe will run a few tests to ensure everything works with the server...and in the program! :)")
+    printGeneric("(This may take a really long time.)\n")
+    if printYNQuestion("Do you want to continue?"):
         passes = 0
         target = 7
         
@@ -620,6 +627,8 @@ def command_selftest():
             printGreen("\nAll tests passed!\n")
         else:
             printRed("\nSome tests failed - read log for details.\n")
+    else:
+        printDebug("\nReturning to menu.\n")
     return
 
 
@@ -636,7 +645,7 @@ def command_exit():
                 deleteFile("output/", outputFile)
                 printDebug("\nDeleted output file: " + outputFile + "\n")
     
-    keyListener.stop()
+    keyboardListener.stop()
     
     exit()
     return
@@ -646,6 +655,7 @@ commandMap = {
     command_help:               ["/help",           "General",      "Shows all available commands."],
     command_clear:              ["/clear",          "General",      "Clears the prompt window."],
     command_config:             ["/config",         "General",      "Reload the configuration files."],
+    command_config_model:       ["/configmodel",    "General",      "Reload the model configuration files."],
     command_settings:           ["/settings",       "General",      "Prints all current settings."],
     command_exit:               ["/exit",           "General",      "Exits the program."],
     
@@ -1178,14 +1188,19 @@ def key_Listener(key):
     return
 
 
-keyListener = keyboard.Listener(suppress=True, on_press=key_Listener)
-keyListener.start()
+keyboardListener = keyboard.Listener(on_press=key_Listener)
+keyboardListener.start()
 
 
 setConversation(strConvoTimestamp)
 
 
 command_clear()
+
+printSeparator()
+printGeneric("Note: This script blocks the use of the [F12] key - remap this in code if needed.")
+printSeparator()
+
 command_settings()
 
 
