@@ -30,10 +30,10 @@
         "default_image_model": "stablediffusion",
         
         "image_size_desc": "set the resolution for images (WxH)",
-        "image_size": "768x1536",
+        "image_size": "960x1536",
         
         "image_steps_desc": "set the amount of steps for images",
-        "image_steps": 16,
+        "image_steps": 18,
         
         "image_clip_skips_desc": "set the number of clip skips for images",
         "image_clip_skips": 11,

@@ -255,18 +255,18 @@ def setOrDefault(promptIn, defaultValueIn, verifierFuncIn, keepDefaultValueStrin
 
 
 def setOrPresetValue(promptIn, presetValueIn, verifierFuncIn, presetTypeStringIn, presetValueStringIn, verifierErrorStringIn):
-    return setOrPresetValue(
+    return setOrPresetValueWithResult(
         promptIn,
-        "leave empty for " + presetTypeStringIn,
         presetValueIn,
         verifierFuncIn,
+        presetTypeStringIn,
         presetValueStringIn,
         "",
         verifierErrorStringIn
     )
 
 
-def setOrPresetValue(promptIn, presetValueIn, verifierFuncIn, presetTypeStringIn, presetValueStringIn, verifiedResultStringIn, verifierErrorStringIn):
+def setOrPresetValueWithResult(promptIn, presetValueIn, verifierFuncIn, presetTypeStringIn, presetValueStringIn, verifiedResultStringIn, verifierErrorStringIn):
     return setOr(
         promptIn,
         "leave empty for " + presetTypeStringIn,

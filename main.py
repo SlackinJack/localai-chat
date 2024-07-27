@@ -29,7 +29,7 @@ from modules.utils_web import *
 #   - pptx
 #   - docx
 # - test write file operation in functions
-# - config reload command
+# - save config
 # - support newer localAI and features
 # - [!!!] setting submenus, especially for images
 
@@ -39,33 +39,46 @@ from modules.utils_web import *
 #################################################
 
 
-#### STATIC CONFIGURATION ####
 stopwords = ["|im_end|>", "\n\n\n\n\n", "</s>"]
 openai.api_key = OPENAI_API_KEY = os.environ["OPENAI_API_KEY"] = "sk-xxx"
 strRespondUsingInformation = "Provide a response that is restricted to the information contained in the following data: "
 strDetermineBestAssistant = "Use the following descriptions of each assistant to determine which assistant has the most relevant skills related to the task given by USER: "
 
 
-####### MODELS LOADER #######
-fileModelsConfiguration = json.loads(readFile("", "models.json"))
+######## GLOBAL VARS ########
+
+
+configs = {}
+modelConfigs = {}
+strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+strConvoName = strConvoTimestamp
+shouldGenerateNextImage = False
+
+
+####### MODELS CONFIG #######
+
+
+def loadModelConfiguration():
+    global modelConfigs
+    modelConfigs = json.loads(readFile("", "models.json"))
+    return
 
 
 def getModelByName(modelNameIn, textModel = True):
-    for model, modelMetadata in fileModelsConfiguration.items():
+    for model, modelMetadata in modelConfigs.items():
         if (modelNameIn in model or modelNameIn == model) and modelMetadata["text_model"] == textModel:
             return model
     return None
 
 
 def resetCurrentModel():
-    global currentModel
-    currentModel = getModelByName(configModel["default_model"], True)
+    configs["default_model"] = getModelByName(configModel["default_model"], True)
     return
 
 
 def getModels(textModels = True):
     out = {}
-    for model, modelMetadata in fileModelsConfiguration.items():
+    for model, modelMetadata in modelConfigs.items():
         if modelMetadata["text_model"] == textModels:
             out[model] = modelMetadata
     return out
@@ -90,64 +103,70 @@ def getEnabledModelDescriptions():
 
 
 def printCurrentSystemPrompt(printer, space = ""):
-    if len(strSystemPrompt) > 0:
-        printer(strSystemPrompt + space)
+    if len(configs["system_prompt"]) > 0:
+        printer(configs["system_prompt"] + space)
     else:
         printer("(Empty)" + space)
     return
 
 
-#### CONFIGURATION LOADER ####
-fileConfiguration = json.loads(readFile("", "config.json"))
+######## MAIN CONFIG ########
 
 
-configMain = fileConfiguration["main_configuration"]
-configModel = fileConfiguration["model_configuration"]
-configBehaviour = fileConfiguration["behavioural_configuration"]
-
-
-# main configs
-if not configMain["address"].endswith("/v1"):
-    newAddress = configMain["address"]
-    if not newAddress.endswith("/"):
-        newAddress += "/"
-    openai.api_base = newAddress + "v1"
-
-
-intResponseTimeout              = configMain["response_timeout_seconds"]
-shouldDeleteOutputFilesOnExit   = configMain["delete_output_files_on_exit"]
-shouldAutomaticallyOpenFiles    = configMain["automatically_open_files"]
-
-
-# model configs
-currentModel                    = getModelByName(configModel["default_model"], True)
-strSystemPrompt                 = configModel["system_prompt"]
-currentImageModel               = configModel["default_image_model"]
-strImageSize                    = configModel["image_size"]
-intImageSteps                   = configModel["image_steps"]
-intClipSkips                    = configModel["image_clip_skips"]
-lstIgnoredModelNames            = configModel["model_scanner_ignored_filenames"]
-
-
-if currentModel is None:
-    printRed("\nYour default model is missing from models.json! Please fix your configuration.")
-    exit()
-
-
-# behavioural configs
-shouldUseFunctions              = configBehaviour["enable_functions"]
-shouldUseInternet               = configBehaviour["enable_internet"]
-shouldAutomaticallySwitchModels = configBehaviour["enable_automatic_model_switching"]
-shouldConsiderHistory           = configBehaviour["enable_chat_history_consideration"]
-intMaxSourcesPerSearch          = configBehaviour["max_sources_per_search"]
-intMaxSentencesPerSource        = configBehaviour["max_sentences_per_source"]
+def loadConfiguration():
+    fileConfiguration = json.loads(readFile("", "config.json"))
+    
+    configMain      = fileConfiguration["main_configuration"]
+    configModel     = fileConfiguration["model_configuration"]
+    configBehaviour = fileConfiguration["behavioural_configuration"]
+    
+    ############### main configs ###############
+    
+    
+    if not configMain["address"].endswith("/v1"):
+        newAddress = configMain["address"]
+        if not newAddress.endswith("/"):
+            newAddress += "/"
+        openai.api_base = newAddress + "v1"
+    
+    configs["response_timeout_seconds"]         = configMain["response_timeout_seconds"]
+    configs["delete_output_files_on_exit"]      = configMain["delete_output_files_on_exit"]
+    configs["automatically_open_files"]         = configMain["automatically_open_files"]
+    
+    
+    ############### model configs ###############
+    
+    
+    configs["default_model"]                    = getModelByName(configModel["default_model"], True)
+    configs["system_prompt"]                    = configModel["system_prompt"]
+    configs["default_image_model"]              = configModel["default_image_model"]
+    configs["image_size"]                       = configModel["image_size"]
+    configs["image_steps"]                      = configModel["image_steps"]
+    configs["image_clip_skips"]                 = configModel["image_clip_skips"]
+    configs["model_scanner_ignored_filenames"]  = configModel["model_scanner_ignored_filenames"]
+    
+    
+    if configs["default_model"] is None:
+        printRed("\nYour default model is missing from models.json! Please fix your configuration.")
+        command_exit()
+    
+    
+    ############ behavioural configs ###########
+    
+    
+    configs["enable_functions"]                     = configBehaviour["enable_functions"]
+    configs["enable_internet"]                      = configBehaviour["enable_internet"]
+    configs["enable_automatic_model_switching"]     = configBehaviour["enable_automatic_model_switching"]
+    configs["enable_chat_history_consideration"]    = configBehaviour["enable_chat_history_consideration"]
+    configs["max_sources_per_search"]               = configBehaviour["max_sources_per_search"]
+    configs["max_sentences_per_source"]             = configBehaviour["max_sentences_per_source"]
+    
+    return
 
 
 #################################################
 ############## BEGIN CONVERSATIONS ##############
 #################################################
-strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-strConvoName = strConvoTimestamp
 
 
 def setConversation(filename):
@@ -164,9 +183,6 @@ def writeConversation(strIn):
 
 def getConversation():
     return readFile("conversations/", strConvoName + ".convo", "\n")
-
-
-setConversation(strConvoTimestamp)
 
 
 ##################################################
@@ -230,7 +246,7 @@ def trigger_openFile(promptIn):
         if checkEmptyString(fileContent):
             fileContent = errorBlankEmptyText("file")
         else:
-            if not shouldUseInternet:
+            if not configs["enable_internet"]:
                 printDebug("\nInternet is disabled - skipping embedded website check.\n")
             else:
                 # check for websites in file
@@ -270,15 +286,15 @@ triggerMap = {
 
 def command_settings():
     printGeneric("\nSettings:")
-    printSetting(shouldUseFunctions, "Functions")
-    printSetting(shouldUseInternet, "Auto Internet Search")
-    printSetting(shouldAutomaticallySwitchModels, "Automatically Switch Models")
-    printSetting(shouldConsiderHistory, "Consider Chat History")
+    printSetting(configs["enable_functions"], "Functions")
+    printSetting(configs["enable_internet"], "Auto Internet Search")
+    printSetting(configs["enable_automatic_model_switching"], "Automatically Switch Models")
+    printSetting(configs["enable_chat_history_consideration"], "Consider Chat History")
     
-    printGeneric("\nModel: " + currentModel)
+    printGeneric("\nModel: " + configs["default_model"])
     
-    printGeneric("\nImage model: " + currentImageModel)
-    printGeneric("Image size: " + strImageSize)
+    printGeneric("\nImage model: " + configs["default_image_model"])
+    printGeneric("Image size: " + configs["image_size"])
     
     printGeneric("\nConversation file: " + strConvoName + ".convo")
     
@@ -323,20 +339,6 @@ def command_image():
     return
 
 
-shouldGenerateNextImage = False
-
-
-def key_Listener(key):
-    global shouldGenerateNextImage
-    if key == keyboard.Key.f12 and shouldGenerateNextImage:
-        shouldGenerateNextImage = False
-        printRed("\n[F12] pressed - stopping image generation after this output.\n")
-    return
-
-
-keyListener = keyboard.Listener(on_press=key_Listener)
-
-
 def command_image_endless():
     imageDesc = printInput("Enter image description (continuous mode): ")
     printSeparator()
@@ -344,7 +346,6 @@ def command_image_endless():
         global shouldGenerateNextImage
         shouldGenerateNextImage = True
         
-        keyListener.start()
         while True:
             if shouldGenerateNextImage:
                 printGeneric("\n(Press [F12] to stop image generation after this output.)\n")
@@ -356,9 +357,20 @@ def command_image_endless():
             else:
                 printGeneric("\nExiting continous image generation - returning to menu.\n")
                 break
-        keyListener.stop()
     else:
         printRed("\nImage prompt was empty - returning to menu.\n")
+    return
+
+
+def command_config():
+    loadConfiguration()
+    printGeneric("\nConfiguration reloaded.\n")
+    return
+
+
+def command_config_model():
+    loadModelConfiguration()
+    printGeneric("\nModel configuration reloaded.\n")
     return
 
 
@@ -383,7 +395,7 @@ def command_convo():
         return [presetName, True]
     
     setConversation(
-        setOrPresetValue(
+        setOrPresetValueWithResult(
             "Select a conversation to use or create a new one by using an unique name",
             presetName,
             convo_verifier,
@@ -401,15 +413,14 @@ def command_model():
         result = getModelByName(nextModelIn, True)
         return [result, result is not None]
     
-    global currentModel
     printGeneric("\nAvailable models:\n")
     for model in getModels(True):
         printGeneric(model)
     printGeneric("")
     
-    currentModel = setOrDefault(
+    configs["default_model"] = setOrDefault(
         "Select a model",
-        currentModel,
+        configs["default_model"],
         model_verifier,
         "Keeping current model",
         "Chat model set to",
@@ -423,15 +434,14 @@ def command_image_model():
         result = getModelByName(nextModelIn, False)
         return [result, result is not None]
     
-    global currentImageModel
     printGeneric("\nAvailable image models:\n")
     for model in getModels(False):
         printGeneric(model)
     printGeneric("")
     
-    currentImageModel = setOrDefault(
+    configs["default_image_model"] = setOrDefault(
         "Select a model for image generation",
-        currentImageModel,
+        configs["default_image_model"],
         image_model_verifier,
         "Keeping current image model",
         "Image model set to",
@@ -453,12 +463,11 @@ def command_image_size():
         else:
             return [nextSizeIn, False]
     
-    global strImageSize
-    printGeneric("\nCurrent output image size ([width]x[height]): " + strImageSize + "\n")
+    printGeneric("\nCurrent output image size ([width]x[height]): " + configs["image_size"] + "\n")
     
-    strImageSize = setOrDefault(
+    configs["image_size"] = setOrDefault(
         "Enter the new image size",
-        strImageSize,
+        configs["image_size"],
         image_size_verifier,
         "Keeping current image size",
         "Image size set to",
@@ -470,26 +479,22 @@ def command_image_size():
 def command_modelscanner():
     modelList = getModelList()
     if modelList is not None:
-        global fileModelsConfiguration
-        
         addModels = {}
         for model in modelList:
-            if not model["id"] in lstIgnoredModelNames and not model["id"] in fileModelsConfiguration.keys():
+            if not model["id"] in configs["model_scanner_ignored_filenames"] and not model["id"] in modelConfigs.keys():
                 # add the model
                 printDebug(model["id"] + " is missing from model config")
                 addModels[model["id"]] = {"text_model": False, "switchable": False, "description": ""}
-        
         printDebug("")
 
-        newModelsJson = fileModelsConfiguration | addModels
+        newModelsJson = modelConfigs | addModels
         outputFileString = json.dumps(newModelsJson, indent=4)
         
         printDump("\nNew models.json:\n\n" + outputFileString + "\n")
         
         deleteFile("", "models.json")
         appendFile("", "models.json", outputFileString)
-        
-        fileModelsConfiguration = json.loads(readFile("", "models.json"))
+        loadModelConfigs()
         
         printGeneric("\nSuccessfully updated your models.json!\n")
     else:
@@ -498,21 +503,19 @@ def command_modelscanner():
 
 
 def command_functions():
-    global shouldUseFunctions
-    shouldUseFunctions = toggleSetting(
-        shouldUseFunctions,
-        "Functions is disabled for prompts.",
-        "Functions is enabled for prompts."
+    configs["enable_functions"] = toggleSetting(
+        configs["enable_functions"],
+        "Functions is now disabled for prompts.",
+        "Functions is now enabled for prompts."
     )
     return
 
 
 def command_online():
-    global shouldUseInternet
-    shouldUseInternet = toggleSetting(
-        shouldUseInternet,
-        "Internet is disabled for functions.",
-        "Internet is enabled for functions."
+    configs["enable_internet"] = toggleSetting(
+        configs["enable_internet"],
+        "Internet is now disabled for functions.",
+        "Internet is now enabled for functions."
     )
     return
 
@@ -523,21 +526,19 @@ def command_curl():
 
 
 def command_history():
-    global shouldConsiderHistory
-    shouldConsiderHistory = toggleSetting(
-        shouldConsiderHistory,
+    configs["enable_chat_history_consideration"] = toggleSetting(
+        configs["enable_chat_history_consideration"],
         "Chat history will not be used in prompts.",
-        "Chat history will be used in prompts."
+        "Chat history will now be used in prompts."
     )
     return
 
 
 def command_switcher():
-    global shouldAutomaticallySwitchModels
-    shouldAutomaticallySwitchModels = toggleSetting(
-        shouldAutomaticallySwitchModels,
-        "Response model will be not be switched.",
-        "Response model will be automatically chosen."
+    configs["enable_automatic_model_switching"] = toggleSetting(
+        configs["enable_automatic_model_switching"],
+        "Response model will not be switched.",
+        "Response model will now be automatically chosen."
     )
     return
 
@@ -562,11 +563,10 @@ def command_help():
 
 
 def command_system_prompt():
-    global strSystemPrompt
     printGeneric("\nCurrent system prompt:")
     printCurrentSystemPrompt(printGeneric, "\n")
     printSeparator()
-    strSystemPrompt = printInput("Enter the new system prompt: ")
+    configs["system_prompt"] = printInput("Enter the new system prompt: ")
     printSeparator()
     printGreen("\nSet system prompt to:")
     printCurrentSystemPrompt(printGreen, "\n")
@@ -584,11 +584,10 @@ def command_selftest():
         passes += 1
         
         printGeneric("\nTesting model switcher...\n")
-        global shouldAutomaticallySwitchModels
-        currentModelSwitcherSetting = shouldAutomaticallySwitchModels
-        shouldAutomaticallySwitchModels = True
+        currentModelSwitcherSetting = configs["enable_automatic_model_switching"]
+        configs["enable_automatic_model_switching"] = True
         getModelResponse("Write a simple python function that prints 'Hello, World!'")
-        shouldAutomaticallySwitchModels = currentModelSwitcherSetting
+        configs["enable_automatic_model_switching"] = currentModelSwitcherSetting
         printGreen("\nModel switcher test passed!\n")
         passes += 1
         
@@ -631,11 +630,14 @@ def command_exit():
                 deleteFile("conversations/", conversation)
                 printDebug("\nDeleted empty conversation file: " + conversation + "\n")
     
-    if shouldDeleteOutputFilesOnExit:
+    if configs["delete_output_files_on_exit"]:
         for outputFile in os.listdir("output"):
             if not outputFile == ".keep":
                 deleteFile("output/", outputFile)
                 printDebug("\nDeleted output file: " + outputFile + "\n")
+    
+    keyListener.stop()
+    
     exit()
     return
 
@@ -643,6 +645,7 @@ def command_exit():
 commandMap = {
     command_help:               ["/help",           "General",      "Shows all available commands."],
     command_clear:              ["/clear",          "General",      "Clears the prompt window."],
+    command_config:             ["/config",         "General",      "Reload the configuration files."],
     command_settings:           ["/settings",       "General",      "Prints all current settings."],
     command_exit:               ["/exit",           "General",      "Exits the program."],
     
@@ -677,11 +680,10 @@ def function_action(actions_array):
 def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo = False):
     nextModel = getModelResponse(userPromptIn)
     
-    global currentModel
-    if nextModel is not None and nextModel is not currentModel:
-        currentModel = nextModel
+    if nextModel is not None and nextModel is not configs["default_model"]:
+        configs["default_model"] = nextModel
     
-    if shouldConsiderHistory:
+    if configs["enable_chat_history_consideration"]:
         promptHistory = getPromptHistory()
     else:
         promptHistory = []
@@ -689,14 +691,14 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
     if len(dataIn) > 0:
         promptHistory = addToPrompt(promptHistory, "system", strRespondUsingInformation + formatArrayToString(dataIn, " "))
     
-    if len(strSystemPrompt) > 0:
-        promptHistory = addToPrompt(promptHistory, "system", strSystemPrompt)
+    if len(configs["system_prompt"]) > 0:
+        promptHistory = addToPrompt(promptHistory, "system", configs["system_prompt"])
     
     promptHistory = addToPrompt(promptHistory, "user", userPromptIn)
     
     printPromptHistory(promptHistory)
     
-    completion = createOpenAIChatCompletionRequest(currentModel, promptHistory, shouldStream = True)
+    completion = createOpenAIChatCompletionRequest(configs["default_model"], promptHistory, shouldStream = True)
     
     printResponse("")
     if completion is not None:
@@ -706,7 +708,7 @@ def getChatCompletionResponse(userPromptIn, dataIn = [], shouldWriteDataToConvo 
         stop = False
         tic = time.perf_counter()
         toc = time.perf_counter()
-        while (toc - tic) < intResponseTimeout:
+        while (toc - tic) < configs["response_timeout_seconds"]:
             toc = time.perf_counter()
             for chunk in completion:
                 letter = chunk.choices[0].delta.content
@@ -824,7 +826,7 @@ function = [{
 
 
 def getFunctionResponse(promptIn):
-    if shouldAutomaticallySwitchModels:
+    if configs["enable_automatic_model_switching"]:
         resetCurrentModel()
     
     hrefs = []
@@ -836,7 +838,7 @@ def getFunctionResponse(promptIn):
     
     # revision, formatting and code cleanup needed
     while True:
-        if shouldConsiderHistory:
+        if configs["enable_chat_history_consideration"]:
             promptHistory = getPromptHistory()
         
         if firstRun:
@@ -860,7 +862,7 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
         printDebug("\nDetermining function(s) to do for this prompt...")
 
         actionsResponse = createOpenAIChatCompletionRequest(
-            currentModel,
+            configs["default_model"],
             fullPrompt,
             functionsIn = function,
             functionCallIn = { "name": "function_action" },
@@ -887,14 +889,14 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
                     
                     
                     case "SEARCH_INTERNET_WITH_SEARCH_TERM":
-                        if not shouldUseInternet:
+                        if not configs["enable_internet"]:
                             printDebug("\nInternet is disabled - skipping this action. ('" + theAction + "': " + theActionInputData + ")")
                         else:
                             if len(theActionInputData) > 0:
                                 theActionInputData = theActionInputData.lower()
                                 if not theActionInputData in searchedTerms and not theActionInputData.upper() in actionEnums:
                                     searchedTerms.append(theActionInputData)
-                                    searchResultSources = getSourcesResponse(theActionInputData, intMaxSourcesPerSearch)
+                                    searchResultSources = getSourcesResponse(theActionInputData, configs["max_sources_per_search"])
                                     nonDuplicateHrefs = []
                                     for href in searchResultSources:
                                         if href not in hrefs:
@@ -902,7 +904,7 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
                                         else:
                                             printDebug("\nSkipped duplicate source: " + key)
                                     if len(nonDuplicateHrefs) > 0:
-                                        searchResults = getSourcesTextAsync(nonDuplicateHrefs, intMaxSentencesPerSource)
+                                        searchResults = getSourcesTextAsync(nonDuplicateHrefs, configs["max_sentences_per_source"])
                                         if len(searchResults) > 0:
                                             for key, value in searchResults.items():
                                                 hrefs.append(key)
@@ -926,7 +928,7 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
                     
                     
                     case "GET_UPDATED_LOCATION_DATA":
-                        if not shouldUseInternet:
+                        if not configs["enable_internet"]:
                             printDebug("\nInternet is disabled - skipping this action. ('" + theAction + "': " + theActionInputData + ")")
                         else:
                             ipRequest = requests.get('https://api64.ipify.org?format=json').json()
@@ -1025,19 +1027,28 @@ def getImageResponse(promptIn, seedIn=None):
     printDebug("Positive prompt:\n" + positivePrompt + "\n")
     if len(negativePrompt) > 0:
         printDebug("Negative prompt:\n" + negativePrompt + "\n")
-    printDebug("Dimensions: " + strImageSize)
+    printDebug("Dimensions: " + configs["image_size"])
     printDebug("Seed: " + str(seedIn))
-    printDebug("Step : " + str(intImageSteps))
-    printDebug("Clip Skip: " + str(intClipSkips))
+    printDebug("Step : " + str(configs["image_steps"]))
+    printDebug("Clip Skip: " + str(configs["image_clip_skips"]))
     
-    theURL = createOpenAIImageRequest(currentImageModel, positivePrompt, negativePrompt, strImageSize, seedIn, intImageSteps, intClipSkips)
+    theURL = createOpenAIImageRequest(
+        configs["default_image_model"],
+        positivePrompt,
+        negativePrompt,
+        configs["image_size"],
+        seedIn,
+        configs["image_steps"],
+        configs["image_clip_skips"]
+    )
+    
     if theURL is not None:
         split = theURL.split("/")
         filename = split[len(split) - 1]
         filename = "output/" + filename
         urllib.request.urlretrieve(theURL, filename)
         
-        if shouldAutomaticallyOpenFiles:
+        if configs["automatically_open_files"]:
             openLocalFile(filename)
         
         return "Your image is available at: " + filename
@@ -1047,8 +1058,8 @@ def getImageResponse(promptIn, seedIn=None):
 
 
 def getModelResponse(promptIn):
-    if not shouldAutomaticallySwitchModels:
-        return currentModel
+    if not configs["enable_automatic_model_switching"]:
+        return configs["default_model"]
     else:
         resetCurrentModel()
         
@@ -1060,7 +1071,7 @@ def getModelResponse(promptIn):
         printDump("\nCurrent prompt for model response:")
         printPromptHistory(promptMessage)
         printDump("\nChoices: " + grammarString)
-        nextModel = createOpenAIChatCompletionRequest(currentModel, promptMessage, grammarIn = grammarString)
+        nextModel = createOpenAIChatCompletionRequest(configs["default_model"], promptMessage, grammarIn = grammarString)
         printDebug("\nNext model: " + nextModel)
         return getModelByName(nextModel)
 
@@ -1074,7 +1085,7 @@ def handlePrompt(promptIn):
     if checkCommands(promptIn) == False:
         if checkTriggers(promptIn) == False:
             tic = time.perf_counter()
-            if shouldUseFunctions:
+            if configs["enable_functions"]:
                 getFunctionResponse(promptIn)
             else:
                 printDebug("Functions are disabled - using chat completion only")
@@ -1150,19 +1161,51 @@ def getPromptHistory():
     return promptHistory
 
 
-##################################################
-################### BEGIN MAIN ###################
-##################################################
+#################################################
+############## BEGIN INITALIZATION ##############
+#################################################
+
+
+loadModelConfiguration()
+loadConfiguration()
+
+
+def key_Listener(key):
+    global shouldGenerateNextImage
+    if key == keyboard.Key.f12 and shouldGenerateNextImage:
+        shouldGenerateNextImage = False
+        printRed("\n[F12] pressed - stopping image generation after this output.\n")
+    return
+
+
+keyListener = keyboard.Listener(suppress=True, on_press=key_Listener)
+keyListener.start()
+
+
+setConversation(strConvoTimestamp)
+
+
 command_clear()
 command_settings()
 
 
-while True:
-    printSeparator()
-    strPrompt = printInput("Enter a prompt ('/help' for list of commands): ")
-    printSeparator()
-    if not checkEmptyString(strPrompt):
-        handlePrompt(strPrompt)
-    else:
-        command_help()
+##################################################
+################### BEGIN MAIN ###################
+##################################################
+
+
+def main():
+    while True:
+        printSeparator()
+        strPrompt = printInput("Enter a prompt ('/help' for list of commands): ")
+        printSeparator()
+        if not checkEmptyString(strPrompt):
+            handlePrompt(strPrompt)
+        else:
+            command_help()
+
+
+if __name__ == "__main__":
+    main()
+
 
