@@ -289,6 +289,41 @@ triggerMap = {
 ##################################################
 
 
+################ General Commands ################
+
+
+def command_help():
+    printGeneric("\nAvailable commands:")
+    currentCategory = ""
+    for commandMetadata in commandMap.values():
+        commandName = commandMetadata[0]
+        commandCategory = commandMetadata[1]
+        commandDescription = commandMetadata[2]
+        if len(currentCategory) == 0:
+            currentCategory = commandCategory
+            printGeneric("\n-------------------- " + currentCategory + " --------------------\n")
+        else:
+            if not currentCategory == commandCategory:
+                currentCategory = commandCategory
+                printGeneric("\n-------------------- " + currentCategory + " --------------------\n")
+        printGeneric(" - " + commandName + " > " + commandDescription)
+    printGeneric("")
+    return
+
+
+def command_config():
+    loadModelConfiguration()
+    loadConfiguration()
+    printGeneric("\nConfiguration reloaded.\n")
+    return
+
+
+def command_config_model():
+    loadModelConfiguration()
+    printGeneric("\nModel configuration reloaded.\n")
+    return
+
+
 def command_settings():
     printGeneric("\nSettings:")
     printSetting(configs["enable_functions"], "Functions")
@@ -310,73 +345,26 @@ def command_settings():
     return
 
 
-def command_image():
-    def seed_verifier(seedIn):
-        try:
-            int(seed)
-            return [seedIn, True]
-        except:
-            return [seedIn, False]
+def command_exit():
+    for conversation in os.listdir("conversations"):
+        if conversation.endswith(".convo"):
+            if checkEmptyString(readFile("conversations/", conversation)):
+                deleteFile("conversations/", conversation)
+                printDebug("\nDeleted empty conversation file: " + conversation + "\n")
     
-    imageDesc = printInput("Enter image description: ")
-    if not checkEmptyString(imageDesc):
-        
-        seed = setOrPresetValue(
-            "Enter an image seed (eg. 1234567890)",
-            None,
-            seed_verifier,
-            "random",
-            "Using a random seed.",
-            "The seed you entered is invalid - using a random seed!"
-        )
-        
-        while True:
-            tic = time.perf_counter()
-            printResponse("\n" + getImageResponse(imageDesc, seed) + "\n")
-            toc = time.perf_counter()
-            printDebug(f"\n\n{toc - tic:0.3f} seconds")
-            if not printYNQuestion("Do you want to regenerate the image with the same prompt and seed?"):
-                printGeneric("\nReturning to menu.\n")
-                break
-    else:
-        printSeparator()
-        printRed("\nImage prompt was empty - returning to menu.\n")
+    if configs["delete_output_files_on_exit"]:
+        for outputFile in os.listdir("output"):
+            if not outputFile == ".keep":
+                deleteFile("output/", outputFile)
+                printDebug("\nDeleted output file: " + outputFile + "\n")
+    
+    keyboardListener.stop()
+    
+    exit()
     return
 
 
-def command_image_endless():
-    imageDesc = printInput("Enter image description (continuous mode): ")
-    printSeparator()
-    if not checkEmptyString(imageDesc):
-        global shouldGenerateNextImage
-        shouldGenerateNextImage = True
-        
-        while True:
-            if shouldGenerateNextImage:
-                printGeneric("\n(Press [F12] to stop image generation after this output.)\n")
-                tic = time.perf_counter()
-                printResponse("\n" + getImageResponse(imageDesc) + "\n")
-                toc = time.perf_counter()
-                printDebug(f"\n\n{toc - tic:0.3f} seconds")
-                printSeparator()
-            else:
-                printGeneric("\nExiting continous image generation - returning to menu.\n")
-                break
-    else:
-        printRed("\nImage prompt was empty - returning to menu.\n")
-    return
-
-
-def command_config():
-    loadConfiguration()
-    printGeneric("\nConfiguration reloaded.\n")
-    return
-
-
-def command_config_model():
-    loadModelConfiguration()
-    printGeneric("\nModel configuration reloaded.\n")
-    return
+################ Settings Commands ################
 
 
 def command_convo():
@@ -405,7 +393,7 @@ def command_convo():
             presetName,
             convo_verifier,
             "auto-generated",
-            "Using generated name.",
+            "Using generated name",
             "Conversation set to",
             ""
         )
@@ -413,7 +401,46 @@ def command_convo():
     return
 
 
+def command_system_prompt():
+    printGeneric("\nCurrent system prompt:")
+    printCurrentSystemPrompt(printGeneric, "\n")
+    printSeparator()
+    configs["system_prompt"] = printInput("Enter the new system prompt: ")
+    printSeparator()
+    printGreen("\nSet system prompt to:")
+    printCurrentSystemPrompt(printGreen, "\n")
+    return
+
+
 def command_model():
+    submenus = ["chat", "image", "exit"]
+    while True:
+        printGeneric("\nModel menu:\n")
+        for submenu in submenus:
+            printGeneric(" - " + submenu)
+        printGeneric("")
+        printSeparator()
+        selection = printInput("Select item: ")
+        printSeparator()
+        
+        match selection:
+            case "chat":
+                submenu_model_chat()
+            case "image":
+                submenu_model_image()
+            case "exit":
+                printGeneric("\nReturning to main menu.\n")
+                break
+            case _:
+                printRed("\nInvalid selection.\n")
+        printSeparator()
+    return
+
+
+### Begin model submenus ###
+
+
+def submenu_model_chat():
     def model_verifier(nextModelIn):
         result = getModelByName(nextModelIn, True)
         return [result, result is not None]
@@ -434,7 +461,7 @@ def command_model():
     return
 
 
-def command_image_model():
+def submenu_model_image():
     def image_model_verifier(nextModelIn):
         result = getModelByName(nextModelIn, False)
         return [result, result is not None]
@@ -455,56 +482,11 @@ def command_image_model():
     return
 
 
-def command_image_size():
-    def image_size_verifier(nextSizeIn):
-        newRes = nextSizeIn.split("x")
-        if len(newRes) == 2:
-            try:
-                int(newRes[0])
-                int(newRes[1])
-                return [nextSizeIn, True]
-            except:
-                return [nextSizeIn, False]
-        else:
-            return [nextSizeIn, False]
-    
-    printGeneric("\nCurrent output image size ([width]x[height]): " + configs["image_size"] + "\n")
-    
-    configs["image_size"] = setOrDefault(
-        "Enter the new image size",
-        configs["image_size"],
-        image_size_verifier,
-        "Keeping current image size",
-        "Image size set to",
-        "Resolution entered is not in the format [width]x[height]\nKeeping current image size"
-    )
-    return
+### End model submenus ###
 
 
-def command_modelscanner():
-    modelList = getModelList()
-    if modelList is not None:
-        addModels = {}
-        for model in modelList:
-            if not model["id"] in configs["model_scanner_ignored_filenames"] and not model["id"] in modelConfigs.keys():
-                # add the model
-                printDebug(model["id"] + " is missing from model config")
-                addModels[model["id"]] = {"text_model": False, "switchable": False, "description": ""}
-        printDebug("")
 
-        newModelsJson = modelConfigs | addModels
-        outputFileString = json.dumps(newModelsJson, indent=4)
-        
-        printDump("\nNew models.json:\n\n" + outputFileString + "\n")
-        
-        deleteFile("", "models.json")
-        appendFile("", "models.json", outputFileString)
-        loadModelConfigs()
-        
-        printGeneric("\nSuccessfully updated your models.json!\n")
-    else:
-        printGeneric("\nCould not update your models.json. (Check your connection?)\n")
-    return
+################# Toggle Commands #################
 
 
 def command_functions():
@@ -522,11 +504,6 @@ def command_online():
         "Internet is now disabled for functions.",
         "Internet is now enabled for functions."
     )
-    return
-
-
-def command_curl():
-    sendCurlCommand()
     return
 
 
@@ -548,33 +525,220 @@ def command_switcher():
     return
 
 
-def command_help():
-    printGeneric("\nAvailable commands:")
-    currentCategory = ""
-    for commandMetadata in commandMap.values():
-        commandName = commandMetadata[0]
-        commandCategory = commandMetadata[1]
-        commandDescription = commandMetadata[2]
-        if len(currentCategory) == 0:
-            currentCategory = commandCategory
-            printGeneric("\n-------------------- " + currentCategory + " --------------------\n")
-        else:
-            if not currentCategory == commandCategory:
-                currentCategory = commandCategory
-                printGeneric("\n-------------------- " + currentCategory + " --------------------\n")
-        printGeneric(" - " + commandName + " > " + commandDescription)
-    printGeneric("")
+################## Tools Commands ##################
+
+
+def command_curl():
+    sendCurlCommand()
     return
 
 
-def command_system_prompt():
-    printGeneric("\nCurrent system prompt:")
-    printCurrentSystemPrompt(printGeneric, "\n")
+def command_image():
+    submenus = ["single", "endless", "settings", "exit"]
+    while True:
+        printGeneric("\nImage menu:\n")
+        for submenu in submenus:
+            printGeneric(" - " + submenu)
+        printGeneric("")
+        printSeparator()
+        selection = printInput("Select item: ")
+        printSeparator()
+        
+        match selection:
+            case "single":
+                submenu_image_single()
+            case "endless":
+                submenu_image_endless()
+            case "settings":
+                while True:
+                    settings_submenus = ["clip_skip", "size", "step", "exit"]
+                    printGeneric("\nImage settings menu:\n")
+                    for setting_submenu in settings_submenus:
+                        printGeneric(" - " + setting_submenu)
+                    printGeneric("")
+                    printSeparator()
+                    settings_selection = printInput("Select item: ")
+                    printSeparator()
+                    
+                    match settings_selection:
+                        case "clip_skip":
+                            submenu_image_settings_clipskip()
+                        case "size":
+                            submenu_image_settings_size()
+                        case "step":
+                            submenu_image_settings_step()
+                        case "exit":
+                            printGeneric("\nReturning to image menu.\n")
+                            break
+                        case _:
+                            printRed("\nInvalid selection.\n")
+                    printSeparator()
+            case "exit":
+                printGeneric("\nReturning to main menu.\n")
+                break
+            case _:
+                printRed("\nInvalid selection.\n")
+        printSeparator()
+    return
+
+
+### Begin image submenus ###
+
+def submenu_image_single():
+    def seed_verifier(seedIn):
+        try:
+            int(seed)
+            return [seedIn, True]
+        except:
+            return [seedIn, False]
+
+    imageDesc = printInput("Enter image description: ")
+    if not checkEmptyString(imageDesc):
+        
+        seed = setOrPresetValue(
+            "Enter an image seed (eg. 1234567890)",
+            None,
+            seed_verifier,
+            "random",
+            "Using a random seed.",
+            "The seed you entered is invalid - using a random seed!"
+        )
+        
+        while True:
+            tic = time.perf_counter()
+            printResponse("\n" + getImageResponse(imageDesc, seed) + "\n")
+            toc = time.perf_counter()
+            printDebug(f"\n\n{toc - tic:0.3f} seconds")
+            if not printYNQuestion("Do you want to regenerate the image with the same prompt and seed?"):
+                printGeneric("\nReturning to menu.\n")
+                break
+    else:
+        printSeparator()
+        printRed("\nImage prompt was empty - returning to image menu.\n")
+    return
+
+
+def submenu_image_endless():
+    imageDesc = printInput("Enter image description (continuous mode): ")
     printSeparator()
-    configs["system_prompt"] = printInput("Enter the new system prompt: ")
-    printSeparator()
-    printGreen("\nSet system prompt to:")
-    printCurrentSystemPrompt(printGreen, "\n")
+    if not checkEmptyString(imageDesc):
+        global shouldGenerateNextImage
+        shouldGenerateNextImage = True
+        
+        while True:
+            if shouldGenerateNextImage:
+                printGeneric("\n(Press [F12] to stop image generation after this output.)\n")
+                tic = time.perf_counter()
+                printResponse("\n" + getImageResponse(imageDesc) + "\n")
+                toc = time.perf_counter()
+                printDebug(f"\n\n{toc - tic:0.3f} seconds")
+                printSeparator()
+            else:
+                printGeneric("\nExiting continous image generation - returning to image menu.\n")
+                break
+    else:
+        printRed("\nImage prompt was empty - returning to image menu.\n")
+    return
+
+
+def submenu_image_settings_clipskip():
+    def clipskip_verifier(clipskipIn):
+        try:
+            int(clipskipIn)
+            return [clipskipIn, True]
+        except:
+            return [clipskipIn, False]
+    
+    printGeneric("\nClip skip is how much an image should diverge from a given prompt.")
+    printGeneric("Higher values are more 'creative'. Lower values are more restricted to the prompt.\n")
+    
+    configs["image_clip_skips"] = setOrDefault(
+        "Enter image clip skip value",
+        configs["image_clip_skips"],
+        clipskip_verifier,
+        "Keeping current image clip skip value",
+        "Image clip skip value set to",
+        "Invalid integer value - keeping current image clip skip value"
+    )
+    return
+
+
+def submenu_image_settings_size():
+    def image_size_verifier(nextSizeIn):
+        newRes = nextSizeIn.split("x")
+        if len(newRes) == 2:
+            try:
+                int(newRes[0])
+                int(newRes[1])
+                return [nextSizeIn, True]
+            except:
+                return [nextSizeIn, False]
+        else:
+            return [nextSizeIn, False]
+    
+    printGeneric("\nSet the output image resolution, in [width]x[height].")
+    printGeneric("Large images will take more time, especially with a high step value.\n")
+    
+    
+    configs["image_size"] = setOrDefault(
+        "Enter the new image size",
+        configs["image_size"],
+        image_size_verifier,
+        "Keeping current image size",
+        "Image size set to",
+        "Resolution entered is not in the format [width]x[height]\nKeeping current image size"
+    )
+    return
+
+
+def submenu_image_settings_step():
+    def step_verifier(stepIn):
+        try:
+            int(stepIn)
+            return [stepIn, True]
+        except:
+            return [stepIn, False]
+    
+    printGeneric("\nSteps is the number of refinement iterations to do on a given image.")
+    printGeneric("More steps usually result in better images, but with gradual diminishing returns.")
+    printGeneric("Higher values will negatively affect processing time with large images.\n")
+    
+    configs["image_steps"] = setOrDefault(
+        "Enter image step value",
+        configs["image_steps"],
+        step_verifier,
+        "Keeping current image step value",
+        "Image step value set to",
+        "Invalid integer value - keeping current image step value"
+    )
+    return
+
+
+### End image submenus ###
+
+
+def command_modelscanner():
+    modelList = getModelList()
+    if modelList is not None:
+        addModels = {}
+        for model in modelList:
+            if not model["id"] in configs["model_scanner_ignored_filenames"] and not model["id"] in modelConfigs.keys():
+                printDebug(model["id"] + " is missing from model config")
+                addModels[model["id"]] = {"text_model": False, "switchable": False, "description": ""}
+        printDebug("")
+
+        newModelsJson = modelConfigs | addModels
+        outputFileString = json.dumps(newModelsJson, indent=4)
+        
+        printDump("\nNew models.json:\n\n" + outputFileString + "\n")
+        
+        deleteFile("", "models.json")
+        appendFile("", "models.json", outputFileString)
+        loadModelConfiguration()
+        
+        printGeneric("\nSuccessfully updated your models.json!\n")
+    else:
+        printGeneric("\nCould not update your models.json. (Check your connection?)\n")
     return
 
 
@@ -632,36 +796,14 @@ def command_selftest():
     return
 
 
-def command_exit():
-    for conversation in os.listdir("conversations"):
-        if conversation.endswith(".convo"):
-            if checkEmptyString(readFile("conversations/", conversation)):
-                deleteFile("conversations/", conversation)
-                printDebug("\nDeleted empty conversation file: " + conversation + "\n")
-    
-    if configs["delete_output_files_on_exit"]:
-        for outputFile in os.listdir("output"):
-            if not outputFile == ".keep":
-                deleteFile("output/", outputFile)
-                printDebug("\nDeleted output file: " + outputFile + "\n")
-    
-    keyboardListener.stop()
-    
-    exit()
-    return
-
-
 commandMap = {
     command_help:               ["/help",           "General",      "Shows all available commands."],
     command_clear:              ["/clear",          "General",      "Clears the prompt window."],
     command_config:             ["/config",         "General",      "Reload the configuration files."],
-    command_config_model:       ["/configmodel",    "General",      "Reload the model configuration files."],
     command_settings:           ["/settings",       "General",      "Prints all current settings."],
     command_exit:               ["/exit",           "General",      "Exits the program."],
     
     command_convo:              ["/convo",          "Settings",     "Change the conversation file."],
-    command_image_model:        ["/imagemodel",     "Settings",     "Change the image model."],
-    command_image_size:         ["/imagesize",      "Settings",     "Change output image size."],
     command_model:              ["/model",          "Settings",     "Change the text model."],
     command_system_prompt:      ["/system",         "Settings",     "Change the system prompt."],
     
@@ -672,7 +814,6 @@ commandMap = {
     
     command_curl:               ["/curl",           "Tools",        "Send cURL commands to the server."],
     command_image:              ["/image",          "Tools",        "Generate images."],
-    command_image_endless:      ["/imagespam",      "Tools",        "Generate images endlessly ('esc' to stop)."],
     command_modelscanner:       ["/modelscanner",   "Tools",        "Scan for models on the server."],
     command_selftest:           ["/selftest",       "Tools",        "Test all program functionality."],
 }

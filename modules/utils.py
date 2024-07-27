@@ -280,7 +280,7 @@ def setOrPresetValueWithResult(promptIn, presetValueIn, verifierFuncIn, presetTy
 
 def setOr(messageIn, leaveEmptyMessageIn, valueIn, verifierFuncIn, noResultMessageIn, verifiedResultMessageIn, verifierErrorMessageIn):
     printSeparator()
-    result = printInput(messageIn + "(" + leaveEmptyMessageIn + " '" + str(valueIn) + "'): ")
+    result = printInput(messageIn + " (" + leaveEmptyMessageIn + " '" + str(valueIn) + "'): ")
     printSeparator()
     if len(result) == 0:
         printRed("\n" + noResultMessageIn + ": " + str(valueIn) + "\n")
