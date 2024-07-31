@@ -33,10 +33,10 @@
         "system_prompt": "You are a helpful ASSISTANT. You will provide a response to USER in the current conversation.",
         
         "default_image_model_desc": "set the default image generation model (must be a valid model if you want to use image generation)",
-        "default_image_model": "test1",
+        "default_image_model": "test",
         
         "image_size_desc": "set the resolution for images (WxH)",
-        "image_size": "512x1344",
+        "image_size": "1024x720",
         
         "image_step_desc": "set the amount of step for images",
         "image_step": 14,

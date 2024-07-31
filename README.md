@@ -59,31 +59,42 @@ roles:
   user: 'USER'
 ```
 
-- If you want to use both CPU and GPU for endless image generation mode:
 
-Make a copy your GPU model.yaml, paste as model-cpu.yaml, eg.:
+### Parallel image requests setup (endless-mode only):
+
+- Make the following model.yamls, and make changes to adapt this to your setup:
 
 ```
-name: stablediffusion
+# configuration for gpu1
+name: stablediffusion-gpu1
 parameters:
-  model: /path/to/stablediffusion/folder/
+  model: /path/to/stablediffusion/folder-gpu1/
 backend: diffusers
 f16: true
 cuda: true
+# etc...
 ```
 
-Then make CPU-specific changes to it, eg.:
-
 ```
-name: stablediffusion-cpu
+# configuration for cpu1
+name: stablediffusion-cpu1
 parameters:
-  model: /path/to/stablediffusion/folder/
+  model: /path/to/stablediffusion/folder-cpu1/
 backend: diffusers
 f16: false
 cuda: false
+# etc...
 ```
 
-Make sure to have the following in your LocalAI launcher,  and make changes as necessary to adapt this to your system/configuration:
+- You can use 'ln -s' to create copies of the model folder.
+
+```
+ln -s /path/to/stablediffusion/folder /path/to/stablediffusion/folder-cpu1
+ln -s /path/to/stablediffusion/folder /path/to/stablediffusion/folder-cpu2
+# and so on...
+```
+
+- Make sure to have the following in your LocalAI launcher,  and make changes to adapt this to your setup:
 
 ```
 --parallel-requests=true --threads=4 --single-active-backend=false

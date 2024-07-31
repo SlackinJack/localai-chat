@@ -22,7 +22,7 @@ from modules.utils_web import *
 
 
 # TODO:
-# - clean code
+# - clean code, start dividing main into modules
 # - fix target links being smashed together
 # - add tests for
 #   - video / speech recognition
@@ -31,7 +31,8 @@ from modules.utils_web import *
 #   - docx
 # - test write file operation in functions
 # - save config
-# - support newer localAI and features
+# - support newer localAI and features (after successful compile)
+# - /exit and exit confirmation in main menu
 
 
 #################################################
@@ -54,8 +55,8 @@ defaultModelName = ""
 strConvoTimestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 strConvoName = strConvoTimestamp
 shouldGenerateNextImage = False
-runningImageThreadsGPU = 0
-runningImageThreadsCPU = 0
+imageThreadsGPU = {}
+imageThreadsCPU = {}
 
 
 ####### MODELS CONFIG #######
@@ -139,6 +140,22 @@ def loadConfiguration():
     configs["automatically_open_files"]         = configMain["automatically_open_files"]
     
     
+    global imageThreadsGPU
+    imageThreadsGPU = {}
+    g = 1
+    while g <= configs["parallel_requests_gpu_max"]:
+        imageThreadsGPU[g] = False
+        g += 1
+
+
+    global imageThreadsCPU
+    imageThreadsCPU = {}
+    c = 1
+    while c <= configs["parallel_requests_cpu_max"]:
+        imageThreadsCPU[c] = False
+        c += 1
+    
+    
     ############### model configs ###############
     
     
@@ -151,7 +168,7 @@ def loadConfiguration():
     
     
     if configs["default_model"] is None:
-        printRed("\nYour default model is missing from models.json! Please fix your configuration.")
+        printError("\nYour default model is missing from models.json! Please fix your configuration.")
         command_exit()
     
     
@@ -433,7 +450,7 @@ def command_model():
                 printGeneric("\nReturning to main menu.\n")
                 break
             case _:
-                printRed("\nInvalid selection.\n")
+                printError("\nInvalid selection.\n")
         printSeparator()
     return
 
@@ -576,13 +593,13 @@ def command_image():
                             printGeneric("\nReturning to image menu.\n")
                             break
                         case _:
-                            printRed("\nInvalid selection.\n")
+                            printError("\nInvalid selection.\n")
                     printSeparator()
             case "exit":
                 printGeneric("\nReturning to main menu.\n")
                 break
             case _:
-                printRed("\nInvalid selection.\n")
+                printError("\nInvalid selection.\n")
         printSeparator()
     return
 
@@ -598,9 +615,11 @@ def submenu_image_single():
             None,
             intVerifier,
             "random",
-            "Using a random seed.",
+            "Using a random seed",
             "The seed you entered is invalid - using a random seed!"
         )
+        
+        printSeparator()
         
         while True:
             tic = time.perf_counter()
@@ -612,7 +631,7 @@ def submenu_image_single():
                 break
     else:
         printSeparator()
-        printRed("\nImage prompt was empty - returning to image menu.\n")
+        printError("\nImage prompt was empty - returning to image menu.\n")
     return
 
 
@@ -634,29 +653,45 @@ def submenu_image_endless():
             printError("'positive prompt | negative prompt'")
             return
         
-        def imageWorkerGPU():
-            global runningImageThreadsGPU
-            runningImageThreadsGPU += 1
+        actualRunningThreadsGPU = {}
+        actualRunningThreadsCPU = {}
+        
+        def imageWorkerGPU(threadNumberIn):
             tic = time.perf_counter()
-            printResponse("\n[GPU] Image created: " + getImageResponse(imageDesc, silent=True) + "\n")
+            printDebug("\n[GPU" + str(threadNumberIn) + "]: Worker started.")
+            printResponse(
+                "\n[GPU" + str(threadNumberIn) + "]: Image created: " +
+                getImageResponse(
+                    imageDesc,
+                    silent=True,
+                    threadNumber=threadNumberIn
+                ) + "\n"
+            )
+            
+            actualRunningThreadsGPU[threadNumberIn] = False
             toc = time.perf_counter()
             printDebug(f"{toc - tic:0.3f} seconds\n")
             printSeparator()
-            runningImageThreadsGPU -= 1
         
-        def imageWorkerCPU():
-            global runningImageThreadsCPU
-            runningImageThreadsCPU += 1
+        def imageWorkerCPU(threadNumberIn):
             tic = time.perf_counter()
-            printResponse("\n[CPU] Image created: " + getImageResponse(imageDesc, silent=True, isCPU=True) + "\n")
+            printDebug("\n[CPU" + str(threadNumberIn) + "]: Worker started.")
+            printResponse(
+                "\n[CPU" + str(threadNumberIn) + "]: Image created: " +
+                getImageResponse(
+                    imageDesc,
+                    silent=True,
+                    isCPU=True,
+                    threadNumber=threadNumberIn
+                ) + "\n"
+            )
+            
+            actualRunningThreadsCPU[threadNumberIn] = False
             toc = time.perf_counter()
             printDebug(f"{toc - tic:0.3f} seconds\n")
             printSeparator()
-            runningImageThreadsCPU -= 1
         
-        global runningImageThreadsGPU
-        global runningImageThreadsCPU
-        
+                
         printGeneric("\n(Press [F12] to stop image generation.)\n")
         printGeneric("\nGenerating images...\n")
         printGeneric("Positive prompt:\n" + positivePrompt + "\n")
@@ -665,26 +700,83 @@ def submenu_image_endless():
         printGeneric("Image Settings:")
         printGeneric("Dimensions: " + configs["image_size"])
         printGeneric("Step: " + str(configs["image_step"]))
-        printGeneric("\nWorkers: " +
-            str(configs["parallel_requests_gpu_max"]) + " GPU + " +
-            str(configs["parallel_requests_cpu_max"]) + " CPU\n")
+        if configs["parallel_requests_gpu_max"] + configs["parallel_requests_cpu_max"] > 1:
+            printGeneric("\nWorkers: " +
+                str(configs["parallel_requests_gpu_max"]) + " GPU + " +
+                str(configs["parallel_requests_cpu_max"]) + " CPU")
+        else:
+            printDebug("\nUsing single worker.")
+        printGeneric("")
         printSeparator()
         
         global shouldGenerateNextImage
         shouldGenerateNextImage = True
         
-        while True:
-            if shouldGenerateNextImage:
-                if runningImageThreadsGPU < configs["parallel_requests_gpu_max"]:
-                    Thread(target = imageWorkerGPU).start()
-                if runningImageThreadsCPU < configs["parallel_requests_cpu_max"]:
-                    Thread(target = imageWorkerCPU).start()
+        
+        global imageThreadsCPU
+        global imageThreadsGPU
+        
+        if len(imageThreadsCPU) + len(imageThreadsGPU) > 1:
+            printGeneric("")
+            if len(imageThreadsCPU) > 0:
+                for c in imageThreadsCPU.keys():
+                    fullCPUModelName = configs["default_image_model"] + "-cpu" + str(c)
+                    if getModelByName(fullCPUModelName, False) is not None:
+                        actualRunningThreadsCPU[c] = False
+                        printDebug("Found config for: " + fullCPUModelName)
+                    else:
+                        printError(fullCPUModelName + " does not exist - skipping worker.")
+            if len(imageThreadsGPU) > 0:
+                for g in imageThreadsGPU.keys():
+                    fullGPUModelName = configs["default_image_model"] + "-gpu" + str(g)
+                    if getModelByName(fullGPUModelName, False) is not None:
+                        actualRunningThreadsGPU[g] = False
+                        printDebug("Found config for: " + fullGPUModelName)
+                    else:
+                        printError(fullGPUModelName + " does not exist - skipping worker.")
+            
+            if len(actualRunningThreadsGPU) + len(actualRunningThreadsCPU) > 0:
+                while True:
+                    if shouldGenerateNextImage:
+                        for threadNumber, isRunning in actualRunningThreadsGPU.items():
+                            if not isRunning:
+                                actualRunningThreadsGPU[threadNumber] = True
+                                Thread(target=imageWorkerGPU, args=(threadNumber,)).start()
+                        for threadNumber, isRunning in actualRunningThreadsCPU.items():
+                            if not isRunning:
+                                actualRunningThreadsCPU[threadNumber] = True
+                                Thread(target=imageWorkerCPU, args=(threadNumber,)).start()
+                    else:
+                        runningThread = False
+                        for isRunning in actualRunningThreadsGPU.values():
+                            if isRunning:
+                                runningThread = True
+                                break
+                        if not runningThread:
+                            for isRunning in actualRunningThreadsCPU.values():
+                                if isRunning:
+                                    runningThread = True
+                                    break
+                        if not runningThread:
+                            printGeneric("\nExiting continous image generation - returning to image menu.\n")
+                            break
             else:
-                if runningImageThreadsGPU == 0 and runningImageThreadsCPU == 0:
+                printError("\nThere are no worker threads to run.")
+                printError("Ensure models are correctly configured.\n")
+                return
+        else:
+            while True:
+                if shouldGenerateNextImage:
+                    tic = time.perf_counter()
+                    printResponse("\nImage created: " + getImageResponse(imageDesc, silent=True) + "\n")
+                    toc = time.perf_counter()
+                    printDebug(f"{toc - tic:0.3f} seconds\n")
+                    printSeparator()
+                else:
                     printGeneric("\nExiting continous image generation - returning to image menu.\n")
                     break
     else:
-        printRed("\nImage prompt was empty - returning to image menu.\n")
+        printError("\nImage prompt was empty - returning to image menu.\n")
     return
 
 
@@ -808,7 +900,7 @@ def command_selftest():
         if passes == target:
             printGreen("\nAll tests passed!\n")
         else:
-            printRed("\nSome tests failed - read log for details.\n")
+            printError("\nSome tests failed - read log for details.\n")
     else:
         printDebug("\nReturning to menu.\n")
     return
@@ -935,13 +1027,21 @@ actionEnums = [
 ]
 
 
-strFunctionSystemPrompt = """Determine if additional actions should be completed in order to fulfill the tasks given by, and/or to provide an accurate response to, the USER's requests.
+strFunctionSystemPromptBody = """Actions in the action plan should only be present if they are crucial for task completion and to provide accurate responses.
 You are always strongly encouraged to use the internet for updated and current information, as well as for information on niche and specific topics.
 You will get the current location data, when prompted for local information, such as, but not limited to, nearby places and venues, or weather updates.
 You will get the current time and date data, when prompted for current information that is time-sensitive, such as, but not limited to, news updates.
 If additional actions should be used, then create an action plan in the form of an array.
 Otherwise, create an blank array.
 Available actions are: '""" + formatArrayToString(actionEnums, "', '") + """'."""
+
+
+strFunctionSystemPrompt = """Determine if additional actions should be completed in order to fulfill the tasks given by, and/or to provide an accurate response to, the USER's requests.
+""" + strFunctionSystemPromptBody
+
+
+strFunctionEditSystemPrompt = """Make revisions to the remaining actions in the action plan, if necessary, using the newly gathered information.
+""" + strFunctionSystemPromptBody
 
 
 strFunctionActionsArrayDescription = """An order-sensitive action plan array that will be completed in order to complete the USER's prompt.
@@ -1019,8 +1119,7 @@ def getFunctionResponse(promptIn):
                 formattedLastActionsArray.append("\n - " + a["action"] + ": " + a["action_input_data"])
             systemPromptHistory = []
             systemPromptHistory = addToPrompt(systemPromptHistory, "system", strRespondUsingInformation + formatArrayToString(datas, " "))
-            systemPromptWithLastActionsResponse = """Make any revisions to the remaining actions in the action plan, if necessary, using the newly gathered information.
-Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "\n" + strFunctionSystemPrompt
+            systemPromptWithLastActionsResponse = strFunctionEditSystemPrompt + """Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ")
             prompt = addToPrompt(systemPromptHistory, "system", systemPromptWithLastActionsResponse)
         
         prompt = addToPrompt(prompt, "user", promptIn)
@@ -1172,7 +1271,7 @@ Remaining actions: """ + formatArrayToString(formattedLastActionsArray, " ") + "
     return
 
 
-def getImageResponse(promptIn, seedIn=None, silent=False, isCPU=False):
+def getImageResponse(promptIn, seedIn=None, silent=False, isCPU=False, threadNumber=1):
     if seedIn is None:
         seedIn = random.randrange(-9999999999, 9999999999)
     else:
@@ -1207,6 +1306,10 @@ def getImageResponse(promptIn, seedIn=None, silent=False, isCPU=False):
     
     if isCPU:
         imageModel += "-cpu"
+    else:
+        imageModel += "-gpu"
+    
+    imageModel += str(threadNumber)
     
     theURL = createOpenAIImageRequest(
         imageModel,
@@ -1365,7 +1468,8 @@ setConversation(strConvoTimestamp)
 command_clear()
 
 printSeparator()
-printGeneric("Note: This script can sometimes block the use of the [F12] key - remap this in code if needed.")
+printGeneric("Note: This script can sometimes block the use of the [F12] key.")
+printGeneric("Remap this in code if needed.")
 printSeparator()
 
 command_settings()

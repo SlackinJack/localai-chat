@@ -19,12 +19,27 @@
         "switchable": false,
         "description": ""
     },
-    "test1": {
+    "test": {
         "text_model": false,
         "switchable": false,
         "description": ""
     },
-    "test1-cpu": {
+    "test-cpu1": {
+        "text_model": false,
+        "switchable": false,
+        "description": ""
+    },
+    "test-cpu2": {
+        "text_model": false,
+        "switchable": false,
+        "description": ""
+    },
+    "test-gpu1": {
+        "text_model": false,
+        "switchable": false,
+        "description": ""
+    },
+    "test-gpu2": {
         "text_model": false,
         "switchable": false,
         "description": ""
